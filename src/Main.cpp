@@ -90,6 +90,20 @@ void renderModeIndicator(const unsigned int shaderProgram,
     renderImage(shaderProgram, VAO, tex.textureID, posX, posY, scaleX, scaleY);
 }
 
+bool isMouseOverIndicator(const double mouseX, const double mouseY, const int screenWidth, const int screenHeight, const TextureData &tex) {
+    const float ndcX = static_cast<float>(mouseX) / screenWidth * 2.0f - 1.0f;
+    const float ndcY = 1.0f - static_cast<float>(mouseY) / screenHeight * 2.0f;
+
+    const float quadWidthNDC = static_cast<float>(tex.width) / screenWidth;
+    const float quadHeightNDC = static_cast<float>(tex.height) / screenHeight;
+
+    const float posX = -1.0f + quadWidthNDC;
+    const float posY = 1.0f - quadHeightNDC;
+
+    return ndcX >= (posX - quadWidthNDC) && ndcX <= (posX + quadWidthNDC) &&
+           ndcY >= (posY - quadHeightNDC) && ndcY <= (posY + quadHeightNDC);
+}
+
 void keyCallback(GLFWwindow *window, const int key, int scancode, const int action, int mods) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -187,9 +201,6 @@ int main() {
     };
 
     struct MeasuringState {
-        // Ovdje ćemo kasnije čuvati tačke i duži za merenje
-        // std::vector<Point> points;
-        // std::vector<Line> lines;
         float totalMeasuredDistance = 0.0f;
     };
 
@@ -203,35 +214,46 @@ int main() {
         auto frameStart = std::chrono::high_resolution_clock::now();
 
         glfwGetWindowSize(window, &screenWidth, &screenHeight);
-
         glClear(GL_COLOR_BUFFER_BIT);
 
-        if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
-            static double lastSwitchTime = 0.0;
+        static double lastSwitchTime = 0.0;
+        const double currentTime = glfwGetTime();
 
-            if (const double currentTime = glfwGetTime(); currentTime - lastSwitchTime > 0.2) {
-                if (isWalkingMode) {
-                    walkingState.mapPosX = mapPosX;
-                    walkingState.mapPosY = mapPosY;
-                    walkingState.totalDistance = totalDistanceWalked;
+        bool switchRequested = false;
 
-                    mapPosX = 0.0f;
-                    mapPosY = 0.0f;
-                } else {
-                    // Čuvamo stanje merenja pre nego što pređemo u hodanje
-                    // measuringState se čuva u svakom trenutku
+        if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS && currentTime - lastSwitchTime > 0.2) {
+            switchRequested = true;
+        }
 
-                    // Vraćamo poziciju mape za hodanje
-                    mapPosX = walkingState.mapPosX;
-                    mapPosY = walkingState.mapPosY;
-                    totalDistanceWalked = walkingState.totalDistance;
-                }
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && currentTime - lastSwitchTime > 0.2) {
+            double mouseX, mouseY;
+            glfwGetCursorPos(window, &mouseX, &mouseY);
 
-                isWalkingMode = !isWalkingMode;
-                lastSwitchTime = currentTime;
+            if (isMouseOverIndicator(mouseX, mouseY, screenWidth, screenHeight, walkingModeIndicator) ||
+                isMouseOverIndicator(mouseX, mouseY, screenWidth, screenHeight, measuringModeIndicator)) {
+                switchRequested = true;
             }
         }
 
+        if (switchRequested) {
+            if (isWalkingMode) {
+                walkingState.mapPosX = mapPosX;
+                walkingState.mapPosY = mapPosY;
+                walkingState.totalDistance = totalDistanceWalked;
+
+                mapPosX = 0.0f;
+                mapPosY = 0.0f;
+            } else {
+                mapPosX = walkingState.mapPosX;
+                mapPosY = walkingState.mapPosY;
+                totalDistanceWalked = walkingState.totalDistance;
+            }
+
+            isWalkingMode = !isWalkingMode;
+            lastSwitchTime = currentTime;
+        }
+
+        // --- Render scene ---
         if (isWalkingMode) {
             constexpr float mapSpeed = 0.4f;
             constexpr float mapScale = 8.0f;
@@ -239,35 +261,24 @@ int main() {
             float moveX = 0.0f;
             float moveY = 0.0f;
 
-            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-                moveY = -mapSpeed / TARGET_FPS;
-            }
-            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-                moveY = mapSpeed / TARGET_FPS;
-            }
-            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-                moveX = mapSpeed / TARGET_FPS;
-            }
-            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-                moveX = -mapSpeed / TARGET_FPS;
-            }
+            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) moveY = -mapSpeed / TARGET_FPS;
+            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) moveY = mapSpeed / TARGET_FPS;
+            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) moveX = mapSpeed / TARGET_FPS;
+            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) moveX = -mapSpeed / TARGET_FPS;
 
             mapPosX += moveX;
             mapPosY += moveY;
 
-            const float distanceThisFrame = std::sqrt(moveX * moveX + moveY * moveY);
-            totalDistanceWalked += distanceThisFrame;
+            totalDistanceWalked += std::sqrt(moveX * moveX + moveY * moveY);
 
             renderImage(shaderProgram, VAO, bgImage.textureID, mapPosX, mapPosY, mapScale, mapScale);
             renderPin(shaderProgram, VAO, pinImage.textureID);
-
             renderModeIndicator(shaderProgram, VAO, walkingModeIndicator, screenWidth, screenHeight, isWalkingMode);
         } else {
-            float screenAspectRatio = static_cast<float>(screenWidth) / static_cast<float>(screenHeight);
-            float mapAspectRatio = static_cast<float>(bgImage.width) / static_cast<float>(bgImage.height);
+            const float screenAspectRatio = static_cast<float>(screenWidth) / static_cast<float>(screenHeight);
+            const float mapAspectRatio = static_cast<float>(bgImage.width) / static_cast<float>(bgImage.height);
 
             float mapScaleX, mapScaleY;
-
             if (screenAspectRatio > mapAspectRatio) {
                 mapScaleY = 2.0f;
                 mapScaleX = mapScaleY * mapAspectRatio / screenAspectRatio;
@@ -287,7 +298,6 @@ int main() {
 
         auto frameEnd = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = frameEnd - frameStart;
-
         if (double sleepTime = FRAME_TIME - elapsed.count(); sleepTime > 0) {
             std::this_thread::sleep_for(std::chrono::duration<double>(sleepTime));
         }
