@@ -13,7 +13,23 @@ int main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow *window = glfwCreateWindow(800, 800, "Kostur", nullptr, nullptr);
+    // --- FULLSCREEN ---
+    GLFWmonitor *monitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode *mode = glfwGetVideoMode(monitor);
+
+    glfwWindowHint(GLFW_RED_BITS, mode->redBits);
+    glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
+    glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
+    glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
+
+    GLFWwindow *window = glfwCreateWindow(
+        mode->width,
+        mode->height,
+        "Kostur",
+        monitor,
+        nullptr
+    );
+
     if (window == nullptr) {
         return endProgram("Prozor nije uspeo da se kreira.");
     }
@@ -22,7 +38,6 @@ int main() {
     cursor = loadImageToCursor("../resources/cursors/compass.png");
     glfwSetCursor(window, cursor);
 
-    // Use glad instead of glew
     if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) {
         return endProgram("GLAD nije uspeo da se inicijalizuje.");
     }
@@ -38,13 +53,11 @@ int main() {
     while (!glfwWindowShouldClose(window)) {
         auto frameStart = std::chrono::high_resolution_clock::now();
 
-        // --- RENDER ---
         glClear(GL_COLOR_BUFFER_BIT);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
 
-        // --- FRAME LIMITER ---
         auto frameEnd = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = frameEnd - frameStart;
 
