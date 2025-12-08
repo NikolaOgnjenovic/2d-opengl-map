@@ -48,6 +48,8 @@ void renderImage(const unsigned int shaderProgram, const unsigned int VAO, const
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, textureID);
 
+    glUniform1i(glGetUniformLocation(shaderProgram, "texture1"), 0);
+
     glBindVertexArray(VAO);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
     glBindVertexArray(0);
@@ -57,11 +59,11 @@ void renderImageBottomRight(const unsigned int shaderProgram,
                             const unsigned int VAO,
                             const TextureData &tex,
                             const int screenWidth, const int screenHeight) {
-    const float quadWidthNDC = static_cast<float>(tex.width) / screenWidth * 2.0f;
-    const float quadHeightNDC = static_cast<float>(tex.height) / screenHeight * 2.0f;
+    const float quadWidthNDC = static_cast<float>(tex.width) / screenWidth;
+    const float quadHeightNDC = static_cast<float>(tex.height) / screenHeight;
 
-    const float scaleX = quadWidthNDC / 2.0f;
-    const float scaleY = quadHeightNDC / 2.0f;
+    const float scaleX = quadWidthNDC;
+    const float scaleY = quadHeightNDC;
 
     const float posX = 1.0f - scaleX;
     const float posY = -1.0f + scaleY;
@@ -75,13 +77,16 @@ void keyCallback(GLFWwindow *window, const int key, int scancode, const int acti
     }
 }
 
+void renderFullscreenImage(const unsigned int shaderProgram, const unsigned int VAO) {
+    renderImage(shaderProgram, VAO, 0, 0.0f, 0.0f, 2.0f, 2.0f);
+}
+
 int main() {
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    // FULLSCREEN SETUP
     GLFWmonitor *monitor = glfwGetPrimaryMonitor();
     const GLFWvidmode *mode = glfwGetVideoMode(monitor);
 
@@ -91,10 +96,7 @@ int main() {
     glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
 
     GLFWwindow *window = glfwCreateWindow(mode->width, mode->height, "Kostur", monitor, nullptr);
-
-    if (!window) {
-        return endProgram("Prozor nije uspeo da se kreira.");
-    }
+    if (!window) return endProgram("Prozor nije uspeo da se kreira.");
 
     glfwMakeContextCurrent(window);
     glfwSetKeyCallback(window, keyCallback);
@@ -102,21 +104,17 @@ int main() {
     cursor = loadImageToCursor("../resources/cursors/compass.png");
     glfwSetCursor(window, cursor);
 
-    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) {
+    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)))
         return endProgram("GLAD nije uspeo da se inicijalizuje.");
-    }
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
     glClearColor(0.6f, 0.8f, 0.87f, 1.0f);
 
-    // Load image
     const TextureData cornerImage = loadTexture("../resources/textures/student_info.png");
-
+    const TextureData bgImage = loadTexture("../resources/textures/map.jpg");
     const unsigned int shaderProgram = createShader("../resources/shaders/hud.vert", "../resources/shaders/hud.frag");
 
-    // Quad setup
     unsigned int VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -126,10 +124,10 @@ int main() {
 
     constexpr float vertices[] = {
         // positions        // uv
-        0.5f, 0.5f, 0.0f, 1.0f, 1.0f,
+        0.5f,  0.5f, 0.0f, 1.0f, 1.0f,
         0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
-        -0.5f, -0.5f, 0.0f, 0.0f, 0.0f,
-        -0.5f, 0.5f, 0.0f, 0.0f, 1.0f
+       -0.5f, -0.5f, 0.0f, 0.0f, 0.0f,
+       -0.5f,  0.5f, 0.0f, 0.0f, 1.0f
     };
 
     constexpr unsigned int indices[] = {0, 1, 3, 1, 2, 3};
@@ -140,9 +138,8 @@ int main() {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), static_cast<void *>(nullptr));
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), nullptr);
     glEnableVertexAttribArray(0);
-
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), reinterpret_cast<void *>(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
@@ -156,10 +153,14 @@ int main() {
     while (!glfwWindowShouldClose(window)) {
         auto frameStart = std::chrono::high_resolution_clock::now();
 
-        glClear(GL_COLOR_BUFFER_BIT);
-
         glfwGetWindowSize(window, &screenWidth, &screenHeight);
 
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // Render fullscreen background
+        renderImage(shaderProgram, VAO, bgImage.textureID, 0.0f, 0.0f, 2.0f, 2.0f);
+
+        // Render corner image
         renderImageBottomRight(shaderProgram, VAO, cornerImage, screenWidth, screenHeight);
 
         glfwSwapBuffers(window);
@@ -178,6 +179,7 @@ int main() {
     glDeleteBuffers(1, &EBO);
     glDeleteProgram(shaderProgram);
     glDeleteTextures(1, &cornerImage.textureID);
+    glDeleteTextures(1, &bgImage.textureID);
 
     glfwDestroyCursor(cursor);
     glfwDestroyWindow(window);
