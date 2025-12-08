@@ -3,6 +3,8 @@
 
 #include "../Header/Util.h"
 
+GLFWcursor* cursor;
+
 int main()
 {
     glfwInit();
@@ -13,6 +15,9 @@ int main()
     GLFWwindow* window = glfwCreateWindow(800, 800, "Kostur", NULL, NULL);
     if (window == NULL) return endProgram("Prozor nije uspeo da se kreira.");
     glfwMakeContextCurrent(window);
+
+    cursor = loadImageToCursor("../resources/cursors/compass.png");
+    glfwSetCursor(window, cursor);
 
     // Use glad instead of glew
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
