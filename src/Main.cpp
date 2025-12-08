@@ -58,7 +58,8 @@ void renderImage(const unsigned int shaderProgram, const unsigned int VAO, const
 void renderImageBottomRight(const unsigned int shaderProgram,
                             const unsigned int VAO,
                             const TextureData &tex,
-                            const int screenWidth, const int screenHeight) {
+                            const int screenWidth, const int screenHeight,
+                            float mapOffsetX, float mapOffsetY) {
     const float quadWidthNDC = static_cast<float>(tex.width) / screenWidth;
     const float quadHeightNDC = static_cast<float>(tex.height) / screenHeight;
 
@@ -77,8 +78,9 @@ void keyCallback(GLFWwindow *window, const int key, int scancode, const int acti
     }
 }
 
-void renderFullscreenImage(const unsigned int shaderProgram, const unsigned int VAO) {
-    renderImage(shaderProgram, VAO, 0, 0.0f, 0.0f, 2.0f, 2.0f);
+void renderPin(const unsigned int shaderProgram, const unsigned int VAO, const unsigned int textureID) {
+    constexpr float pinScale = 0.05f;
+    renderImage(shaderProgram, VAO, textureID, 0.0f, 0.0f, pinScale, pinScale);
 }
 
 int main() {
@@ -95,8 +97,10 @@ int main() {
     glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
     glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
 
-    GLFWwindow *window = glfwCreateWindow(mode->width, mode->height, "Kostur", monitor, nullptr);
-    if (!window) return endProgram("Prozor nije uspeo da se kreira.");
+    GLFWwindow *window = glfwCreateWindow(mode->width, mode->height, "Kretanje po mapi", monitor, nullptr);
+    if (!window) {
+        return endProgram("Prozor nije uspeo da se kreira.");
+    }
 
     glfwMakeContextCurrent(window);
     glfwSetKeyCallback(window, keyCallback);
@@ -104,8 +108,9 @@ int main() {
     cursor = loadImageToCursor("../resources/cursors/compass.png");
     glfwSetCursor(window, cursor);
 
-    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)))
+    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) {
         return endProgram("GLAD nije uspeo da se inicijalizuje.");
+    }
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -113,6 +118,8 @@ int main() {
 
     const TextureData cornerImage = loadTexture("../resources/textures/student_info.png");
     const TextureData bgImage = loadTexture("../resources/textures/map.jpg");
+    const TextureData pinImage = loadTexture("../resources/textures/pin.png");
+
     const unsigned int shaderProgram = createShader("../resources/shaders/hud.vert", "../resources/shaders/hud.frag");
 
     unsigned int VBO, VAO, EBO;
@@ -124,10 +131,10 @@ int main() {
 
     constexpr float vertices[] = {
         // positions        // uv
-        0.5f,  0.5f, 0.0f, 1.0f, 1.0f,
+        0.5f, 0.5f, 0.0f, 1.0f, 1.0f,
         0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
-       -0.5f, -0.5f, 0.0f, 0.0f, 0.0f,
-       -0.5f,  0.5f, 0.0f, 0.0f, 1.0f
+        -0.5f, -0.5f, 0.0f, 0.0f, 0.0f,
+        -0.5f, 0.5f, 0.0f, 0.0f, 1.0f
     };
 
     constexpr unsigned int indices[] = {0, 1, 3, 1, 2, 3};
@@ -147,21 +154,37 @@ int main() {
 
     int screenWidth, screenHeight;
 
+    float mapPosX = 0.0f;
+    float mapPosY = 0.0f;
+
     constexpr double TARGET_FPS = 75.0;
     constexpr double FRAME_TIME = 1.0 / TARGET_FPS;
 
     while (!glfwWindowShouldClose(window)) {
+        constexpr float mapSpeed = 0.4f;
+        constexpr float mapScale = 8.0f;
         auto frameStart = std::chrono::high_resolution_clock::now();
 
         glfwGetWindowSize(window, &screenWidth, &screenHeight);
 
         glClear(GL_COLOR_BUFFER_BIT);
 
-        // Render fullscreen background
-        renderImage(shaderProgram, VAO, bgImage.textureID, 0.0f, 0.0f, 2.0f, 2.0f);
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+            mapPosY -= mapSpeed / TARGET_FPS;
+        }
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+            mapPosY += mapSpeed / TARGET_FPS;
+        }
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+            mapPosX += mapSpeed / TARGET_FPS;
+        }
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+            mapPosX -= mapSpeed / TARGET_FPS;
+        }
 
-        // Render corner image
-        renderImageBottomRight(shaderProgram, VAO, cornerImage, screenWidth, screenHeight);
+        renderImage(shaderProgram, VAO, bgImage.textureID, mapPosX, mapPosY, mapScale, mapScale);
+        renderPin(shaderProgram, VAO, pinImage.textureID);
+        renderImageBottomRight(shaderProgram, VAO, cornerImage, screenWidth, screenHeight, mapPosX, mapPosY);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -180,6 +203,7 @@ int main() {
     glDeleteProgram(shaderProgram);
     glDeleteTextures(1, &cornerImage.textureID);
     glDeleteTextures(1, &bgImage.textureID);
+    glDeleteTextures(1, &pinImage.textureID);
 
     glfwDestroyCursor(cursor);
     glfwDestroyWindow(window);
