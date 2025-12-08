@@ -79,11 +79,11 @@ elseif(APPLE)
 endif()
 
 # --- Copy resources ---
-if(EXISTS ${CMAKE_SOURCE_DIR}/shaders)
+if(EXISTS ${CMAKE_SOURCE_DIR}/resources/shaders)
     add_custom_command(TARGET Kostur POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_SOURCE_DIR}/shaders
-            ${CMAKE_CURRENT_BINARY_DIR}/shaders
+            ${CMAKE_SOURCE_DIR}/resources/shaders
+            ${CMAKE_CURRENT_BINARY_DIR}/resources/shaders
     )
 endif()
 
