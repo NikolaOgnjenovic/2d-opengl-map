@@ -1,4 +1,5 @@
 ﻿#include <chrono>
+#include <cmath>
 #include <thread>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -72,6 +73,23 @@ void renderImageBottomRight(const unsigned int shaderProgram,
     renderImage(shaderProgram, VAO, tex.textureID, posX, posY, scaleX, scaleY);
 }
 
+void renderModeIndicator(const unsigned int shaderProgram,
+                         const unsigned int VAO,
+                         const TextureData &tex,
+                         const int screenWidth, const int screenHeight,
+                         bool isWalkingMode) {
+    const float quadWidthNDC = static_cast<float>(tex.width) / screenWidth;
+    const float quadHeightNDC = static_cast<float>(tex.height) / screenHeight;
+
+    const float scaleX = quadWidthNDC;
+    const float scaleY = quadHeightNDC;
+
+    const float posX = -1.0f + scaleX;
+    const float posY = 1.0f - scaleY;
+
+    renderImage(shaderProgram, VAO, tex.textureID, posX, posY, scaleX, scaleY);
+}
+
 void keyCallback(GLFWwindow *window, const int key, int scancode, const int action, int mods) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -119,6 +137,8 @@ int main() {
     const TextureData cornerImage = loadTexture("../resources/textures/student_info.png");
     const TextureData bgImage = loadTexture("../resources/textures/map.jpg");
     const TextureData pinImage = loadTexture("../resources/textures/pin.png");
+    const TextureData walkingModeIndicator = loadTexture("../resources/textures/walking.png");
+    const TextureData measuringModeIndicator = loadTexture("../resources/textures/ruler.png");
 
     const unsigned int shaderProgram = createShader("../resources/shaders/hud.vert", "../resources/shaders/hud.frag");
 
@@ -157,33 +177,109 @@ int main() {
     float mapPosX = 0.0f;
     float mapPosY = 0.0f;
 
+    bool isWalkingMode = true;
+    float totalDistanceWalked = 0.0f;
+
+    struct WalkingState {
+        float mapPosX;
+        float mapPosY;
+        float totalDistance;
+    };
+
+    struct MeasuringState {
+        // Ovdje ćemo kasnije čuvati tačke i duži za merenje
+        // std::vector<Point> points;
+        // std::vector<Line> lines;
+        float totalMeasuredDistance = 0.0f;
+    };
+
+    WalkingState walkingState{};
+    MeasuringState measuringState;
+
     constexpr double TARGET_FPS = 75.0;
     constexpr double FRAME_TIME = 1.0 / TARGET_FPS;
 
     while (!glfwWindowShouldClose(window)) {
-        constexpr float mapSpeed = 0.4f;
-        constexpr float mapScale = 8.0f;
         auto frameStart = std::chrono::high_resolution_clock::now();
 
         glfwGetWindowSize(window, &screenWidth, &screenHeight);
 
         glClear(GL_COLOR_BUFFER_BIT);
 
-        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-            mapPosY -= mapSpeed / TARGET_FPS;
-        }
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-            mapPosY += mapSpeed / TARGET_FPS;
-        }
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-            mapPosX += mapSpeed / TARGET_FPS;
-        }
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-            mapPosX -= mapSpeed / TARGET_FPS;
+        if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
+            static double lastSwitchTime = 0.0;
+
+            if (const double currentTime = glfwGetTime(); currentTime - lastSwitchTime > 0.2) {
+                if (isWalkingMode) {
+                    walkingState.mapPosX = mapPosX;
+                    walkingState.mapPosY = mapPosY;
+                    walkingState.totalDistance = totalDistanceWalked;
+
+                    mapPosX = 0.0f;
+                    mapPosY = 0.0f;
+                } else {
+                    // Čuvamo stanje merenja pre nego što pređemo u hodanje
+                    // measuringState se čuva u svakom trenutku
+
+                    // Vraćamo poziciju mape za hodanje
+                    mapPosX = walkingState.mapPosX;
+                    mapPosY = walkingState.mapPosY;
+                    totalDistanceWalked = walkingState.totalDistance;
+                }
+
+                isWalkingMode = !isWalkingMode;
+                lastSwitchTime = currentTime;
+            }
         }
 
-        renderImage(shaderProgram, VAO, bgImage.textureID, mapPosX, mapPosY, mapScale, mapScale);
-        renderPin(shaderProgram, VAO, pinImage.textureID);
+        if (isWalkingMode) {
+            constexpr float mapSpeed = 0.4f;
+            constexpr float mapScale = 8.0f;
+
+            float moveX = 0.0f;
+            float moveY = 0.0f;
+
+            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+                moveY = -mapSpeed / TARGET_FPS;
+            }
+            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+                moveY = mapSpeed / TARGET_FPS;
+            }
+            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+                moveX = mapSpeed / TARGET_FPS;
+            }
+            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+                moveX = -mapSpeed / TARGET_FPS;
+            }
+
+            mapPosX += moveX;
+            mapPosY += moveY;
+
+            const float distanceThisFrame = std::sqrt(moveX * moveX + moveY * moveY);
+            totalDistanceWalked += distanceThisFrame;
+
+            renderImage(shaderProgram, VAO, bgImage.textureID, mapPosX, mapPosY, mapScale, mapScale);
+            renderPin(shaderProgram, VAO, pinImage.textureID);
+
+            renderModeIndicator(shaderProgram, VAO, walkingModeIndicator, screenWidth, screenHeight, isWalkingMode);
+        } else {
+            float screenAspectRatio = static_cast<float>(screenWidth) / static_cast<float>(screenHeight);
+            float mapAspectRatio = static_cast<float>(bgImage.width) / static_cast<float>(bgImage.height);
+
+            float mapScaleX, mapScaleY;
+
+            if (screenAspectRatio > mapAspectRatio) {
+                mapScaleY = 2.0f;
+                mapScaleX = mapScaleY * mapAspectRatio / screenAspectRatio;
+            } else {
+                mapScaleX = 2.0f;
+                mapScaleY = mapScaleX * screenAspectRatio / mapAspectRatio;
+            }
+
+            renderImage(shaderProgram, VAO, bgImage.textureID, 0.0f, 0.0f, mapScaleX, mapScaleY);
+            renderModeIndicator(shaderProgram, VAO, measuringModeIndicator, screenWidth, screenHeight, isWalkingMode);
+        }
+
         renderImageBottomRight(shaderProgram, VAO, cornerImage, screenWidth, screenHeight, mapPosX, mapPosY);
 
         glfwSwapBuffers(window);
@@ -204,6 +300,8 @@ int main() {
     glDeleteTextures(1, &cornerImage.textureID);
     glDeleteTextures(1, &bgImage.textureID);
     glDeleteTextures(1, &pinImage.textureID);
+    glDeleteTextures(1, &walkingModeIndicator.textureID);
+    glDeleteTextures(1, &measuringModeIndicator.textureID);
 
     glfwDestroyCursor(cursor);
     glfwDestroyWindow(window);
