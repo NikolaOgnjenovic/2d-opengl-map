@@ -7,6 +7,13 @@
 
 GLFWcursor *cursor;
 
+void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
+}
+
 int main() {
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -34,6 +41,8 @@ int main() {
         return endProgram("Prozor nije uspeo da se kreira.");
     }
     glfwMakeContextCurrent(window);
+
+    glfwSetKeyCallback(window, keyCallback);
 
     cursor = loadImageToCursor("../resources/cursors/compass.png");
     glfwSetCursor(window, cursor);
