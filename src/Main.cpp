@@ -1,6 +1,8 @@
 ﻿#include <chrono>
 #include <cmath>
 #include <thread>
+#include <vector>
+#include <algorithm>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
@@ -90,7 +92,8 @@ void renderModeIndicator(const unsigned int shaderProgram,
     renderImage(shaderProgram, VAO, tex.textureID, posX, posY, scaleX, scaleY);
 }
 
-bool isMouseOverIndicator(const double mouseX, const double mouseY, const int screenWidth, const int screenHeight, const TextureData &tex) {
+bool isMouseOverIndicator(const double mouseX, const double mouseY, const int screenWidth, const int screenHeight,
+                          const TextureData &tex) {
     const float ndcX = static_cast<float>(mouseX) / screenWidth * 2.0f - 1.0f;
     const float ndcY = 1.0f - static_cast<float>(mouseY) / screenHeight * 2.0f;
 
@@ -125,7 +128,7 @@ void renderNumber(const unsigned int shaderProgram, const unsigned int VAO,
     const std::string s = std::to_string(number);
     float offsetX = 0.0f;
 
-    for (const char c : s) {
+    for (const char c: s) {
         if (c >= '0' && c <= '9') {
             const int digit = c - '0';
             renderImage(shaderProgram, VAO, dt.digits[digit].textureID, x + offsetX, y, scale, scale);
@@ -136,6 +139,71 @@ void renderNumber(const unsigned int shaderProgram, const unsigned int VAO,
         }
     }
 }
+
+// Funkcije za crtanje linija i tačaka
+void renderLine(const unsigned int shaderProgram, const unsigned int VAO,
+                float x1, float y1, float x2, float y2, float thickness = 0.005f) {
+    glUseProgram(shaderProgram);
+
+    // Izračunaj sredinu i rotaciju za liniju
+    float dx = x2 - x1;
+    float dy = y2 - y1;
+    float length = std::sqrt(dx * dx + dy * dy);
+    float angle = std::atan2(dy, dx);
+
+    float midX = (x1 + x2) / 2.0f;
+    float midY = (y1 + y2) / 2.0f;
+
+    auto model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(midX, midY, 0.0f));
+    model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
+    model = glm::scale(model, glm::vec3(length, thickness, 1.0f));
+
+    const int modelLoc = glGetUniformLocation(shaderProgram, "model");
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
+
+    // Koristi belu boju za linije
+    glUniform3f(glGetUniformLocation(shaderProgram, "customColor"), 1.0f, 1.0f, 1.0f);
+    glUniform1i(glGetUniformLocation(shaderProgram, "useCustomColor"), 1);
+
+    glBindVertexArray(VAO);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+    glBindVertexArray(0);
+
+    // Resetuj flag za custom boju
+    glUniform1i(glGetUniformLocation(shaderProgram, "useCustomColor"), 0);
+}
+
+void renderPoint(const unsigned int shaderProgram, const unsigned int VAO,
+                 float x, float y, float size = 0.02f) {
+    glUseProgram(shaderProgram);
+
+    auto model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(x, y, 0.0f));
+    model = glm::scale(model, glm::vec3(size, size, 1.0f));
+
+    const int modelLoc = glGetUniformLocation(shaderProgram, "model");
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
+
+    // Koristi belu boju za tačke
+    glUniform3f(glGetUniformLocation(shaderProgram, "customColor"), 1.0f, 1.0f, 1.0f);
+    glUniform1i(glGetUniformLocation(shaderProgram, "useCustomColor"), 1);
+
+    glBindVertexArray(VAO);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+    glBindVertexArray(0);
+
+    // Resetuj flag za custom boju
+    glUniform1i(glGetUniformLocation(shaderProgram, "useCustomColor"), 0);
+}
+
+struct Point {
+    float x, y;
+
+    bool operator==(const Point &other) const {
+        return std::abs(x - other.x) < 0.001f && std::abs(y - other.y) < 0.001f;
+    }
+};
 
 int main() {
     glfwInit();
@@ -228,6 +296,7 @@ int main() {
     };
 
     struct MeasuringState {
+        std::vector<Point> points;
         float totalMeasuredDistance = 0.0f;
     };
 
@@ -237,6 +306,7 @@ int main() {
     constexpr double TARGET_FPS = 75.0;
     constexpr double FRAME_TIME = 1.0 / TARGET_FPS;
 
+    static bool leftMousePressed = false;
     while (!glfwWindowShouldClose(window)) {
         auto frameStart = std::chrono::high_resolution_clock::now();
 
@@ -264,13 +334,16 @@ int main() {
 
         if (switchRequested) {
             if (isWalkingMode) {
+                // Sačuvaj stanje hodanja
                 walkingState.mapPosX = mapPosX;
                 walkingState.mapPosY = mapPosY;
                 walkingState.totalDistance = totalDistanceWalked;
 
+                // Resetuj poziciju mape za merenje
                 mapPosX = 0.0f;
                 mapPosY = 0.0f;
             } else {
+                // Vrati stanje hodanja
                 mapPosX = walkingState.mapPosX;
                 mapPosY = walkingState.mapPosY;
                 totalDistanceWalked = walkingState.totalDistance;
@@ -317,6 +390,95 @@ int main() {
 
             renderImage(shaderProgram, VAO, bgImage.textureID, 0.0f, 0.0f, mapScaleX, mapScaleY);
             renderModeIndicator(shaderProgram, VAO, measuringModeIndicator, screenWidth, screenHeight, isWalkingMode);
+
+            for (size_t i = 0; i < measuringState.points.size(); ++i) {
+                const Point &p = measuringState.points[i];
+                renderPoint(shaderProgram, VAO, p.x, p.y);
+
+                if (i > 0) {
+                    const Point &prev = measuringState.points[i - 1];
+                    renderLine(shaderProgram, VAO, prev.x, prev.y, p.x, p.y);
+                }
+            }
+
+            renderNumber(shaderProgram, VAO, digitTextures, measuringState.totalMeasuredDistance, -0.95f, 0.9f, 0.05f);
+
+            if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !leftMousePressed) {
+                leftMousePressed = true;
+                double mouseX, mouseY;
+                glfwGetCursorPos(window, &mouseX, &mouseY);
+
+                float ndcX = static_cast<float>(mouseX) / screenWidth * 2.0f - 1.0f;
+                float ndcY = 1.0f - static_cast<float>(mouseY) / screenHeight * 2.0f;
+
+                bool clickedOnExistingPoint = false;
+                size_t clickedIndex = 0;
+
+                for (size_t i = 0; i < measuringState.points.size(); ++i) {
+                    const Point &p = measuringState.points[i];
+                    float dist = std::sqrt((p.x - ndcX) * (p.x - ndcX) + (p.y - ndcY) * (p.y - ndcY));
+
+                    if (dist < 0.03f) {
+                        clickedOnExistingPoint = true;
+                        clickedIndex = i;
+                        break;
+                    }
+                }
+
+                if (clickedOnExistingPoint) {
+                    if (!measuringState.points.empty()) {
+                        if (clickedIndex > 0) {
+                            const Point &prev = measuringState.points[clickedIndex - 1];
+                            const Point &curr = measuringState.points[clickedIndex];
+                            measuringState.totalMeasuredDistance -= std::sqrt(
+                                (prev.x - curr.x) * (prev.x - curr.x) +
+                                (prev.y - curr.y) * (prev.y - curr.y)
+                            );
+                        }
+
+                        if (clickedIndex < measuringState.points.size() - 1) {
+                            const Point &curr = measuringState.points[clickedIndex];
+                            const Point &next = measuringState.points[clickedIndex + 1];
+                            measuringState.totalMeasuredDistance -= std::sqrt(
+                                (curr.x - next.x) * (curr.x - next.x) +
+                                (curr.y - next.y) * (curr.y - next.y)
+                            );
+                        }
+
+                        measuringState.points.erase(measuringState.points.begin() + clickedIndex);
+
+                        if (clickedIndex > 0 && clickedIndex < measuringState.points.size()) {
+                            const Point &prev = measuringState.points[clickedIndex - 1];
+                            const Point &next = measuringState.points[clickedIndex];
+                            float newDist = std::sqrt(
+                                (prev.x - next.x) * (prev.x - next.x) +
+                                (prev.y - next.y) * (prev.y - next.y)
+                            );
+                            measuringState.totalMeasuredDistance += newDist;
+                        }
+                    }
+                } else {
+                    measuringState.points.push_back({ndcX, ndcY});
+
+                    if (measuringState.points.size() > 1) {
+                        const Point &prev = measuringState.points[measuringState.points.size() - 2];
+                        const Point &curr = measuringState.points.back();
+
+                        constexpr float walkingMapScale = 8.0f;
+                        float ndcDistance = std::sqrt(
+                            (prev.x - curr.x) * (prev.x - curr.x) +
+                            (prev.y - curr.y) * (prev.y - curr.y)
+                        );
+
+                        float convertedDistance = ndcDistance * walkingMapScale * 2.0f;
+                        measuringState.totalMeasuredDistance += convertedDistance;
+                    }
+                }
+            }
+
+            if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE) {
+                leftMousePressed = false;
+            }
         }
 
         renderImageBottomRight(shaderProgram, VAO, cornerImage, screenWidth, screenHeight, mapPosX, mapPosY);
