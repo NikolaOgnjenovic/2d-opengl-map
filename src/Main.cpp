@@ -115,6 +115,28 @@ void renderPin(const unsigned int shaderProgram, const unsigned int VAO, const u
     renderImage(shaderProgram, VAO, textureID, 0.0f, 0.0f, pinScale, pinScale);
 }
 
+struct DigitTextures {
+    TextureData digits[10];
+    TextureData dot;
+};
+
+void renderNumber(const unsigned int shaderProgram, const unsigned int VAO,
+                  const DigitTextures &dt, const float number, const float x, const float y, const float scale) {
+    const std::string s = std::to_string(number);
+    float offsetX = 0.0f;
+
+    for (const char c : s) {
+        if (c >= '0' && c <= '9') {
+            const int digit = c - '0';
+            renderImage(shaderProgram, VAO, dt.digits[digit].textureID, x + offsetX, y, scale, scale);
+            offsetX += scale * 0.6f;
+        } else if (c == '.') {
+            renderImage(shaderProgram, VAO, dt.dot.textureID, x + offsetX, y, scale, scale);
+            offsetX += scale * 0.6f;
+        }
+    }
+}
+
 int main() {
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -146,13 +168,18 @@ int main() {
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glClearColor(0.6f, 0.8f, 0.87f, 1.0f);
 
     const TextureData cornerImage = loadTexture("../resources/textures/student_info.png");
     const TextureData bgImage = loadTexture("../resources/textures/map.jpg");
     const TextureData pinImage = loadTexture("../resources/textures/pin.png");
     const TextureData walkingModeIndicator = loadTexture("../resources/textures/walking.png");
     const TextureData measuringModeIndicator = loadTexture("../resources/textures/ruler.png");
+    DigitTextures digitTextures{};
+    for (int i = 0; i < 10; ++i) {
+        std::string path = "../resources/textures/digits/" + std::to_string(i) + ".png";
+        digitTextures.digits[i] = loadTexture(path.c_str());
+    }
+    digitTextures.dot = loadTexture("../resources/textures/digits/dot.png");
 
     const unsigned int shaderProgram = createShader("../resources/shaders/hud.vert", "../resources/shaders/hud.frag");
 
@@ -274,6 +301,7 @@ int main() {
             renderImage(shaderProgram, VAO, bgImage.textureID, mapPosX, mapPosY, mapScale, mapScale);
             renderPin(shaderProgram, VAO, pinImage.textureID);
             renderModeIndicator(shaderProgram, VAO, walkingModeIndicator, screenWidth, screenHeight, isWalkingMode);
+            renderNumber(shaderProgram, VAO, digitTextures, totalDistanceWalked, -0.95f, 0.9f, 0.05f);
         } else {
             const float screenAspectRatio = static_cast<float>(screenWidth) / static_cast<float>(screenHeight);
             const float mapAspectRatio = static_cast<float>(bgImage.width) / static_cast<float>(bgImage.height);
