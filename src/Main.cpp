@@ -298,6 +298,10 @@ int main() {
 
     static bool leftMousePressed = false;
 
+    constexpr float mapSpeed = 0.4f;
+    constexpr float mapScale = 8.0f;
+    constexpr float fullscreenScale = 2.0f;
+
     while (!glfwWindowShouldClose(window)) {
         auto frameStart = std::chrono::high_resolution_clock::now();
 
@@ -342,9 +346,6 @@ int main() {
 
         // --- Render scene ---
         if (isWalkingMode) {
-            constexpr float mapSpeed = 0.4f;
-            constexpr float mapScale = 8.0f;
-
             float moveX = 0.0f;
             float moveY = 0.0f;
 
@@ -364,7 +365,7 @@ int main() {
             renderNumber(shaderProgram, VAO, digitTextures, totalDistanceWalked, -0.95f, 0.9f, 0.05f);
         } else {
             // --- Fullscreen map ---
-            renderImage(shaderProgram, VAO, bgImage.textureID, 0.0f, 0.0f, 2.0f, 2.0f);
+            renderImage(shaderProgram, VAO, bgImage.textureID, 0.0f, 0.0f, fullscreenScale, fullscreenScale);
             renderModeIndicator(shaderProgram, VAO, measuringModeIndicator, screenWidth, screenHeight);
 
             for (size_t i = 0; i < measuringState.points.size(); ++i) {
@@ -445,7 +446,7 @@ int main() {
                             (prev.y - curr.y) * (prev.y - curr.y)
                         );
 
-                        float convertedDistance = ndcDistance * 2.0f; // full-screen map scale
+                        float convertedDistance = ndcDistance * (mapScale / fullscreenScale);
                         measuringState.totalMeasuredDistance += convertedDistance;
                     }
                 }
