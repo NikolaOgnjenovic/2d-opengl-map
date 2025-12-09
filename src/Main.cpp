@@ -61,8 +61,7 @@ void renderImage(const unsigned int shaderProgram, const unsigned int VAO, const
 void renderImageBottomRight(const unsigned int shaderProgram,
                             const unsigned int VAO,
                             const TextureData &tex,
-                            const int screenWidth, const int screenHeight,
-                            float mapOffsetX, float mapOffsetY) {
+                            const int screenWidth, const int screenHeight) {
     const float quadWidthNDC = static_cast<float>(tex.width) / screenWidth;
     const float quadHeightNDC = static_cast<float>(tex.height) / screenHeight;
 
@@ -78,8 +77,7 @@ void renderImageBottomRight(const unsigned int shaderProgram,
 void renderModeIndicator(const unsigned int shaderProgram,
                          const unsigned int VAO,
                          const TextureData &tex,
-                         const int screenWidth, const int screenHeight,
-                         bool isWalkingMode) {
+                         const int screenWidth, const int screenHeight) {
     const float quadWidthNDC = static_cast<float>(tex.width) / screenWidth;
     const float quadHeightNDC = static_cast<float>(tex.height) / screenHeight;
 
@@ -140,12 +138,10 @@ void renderNumber(const unsigned int shaderProgram, const unsigned int VAO,
     }
 }
 
-// Funkcije za crtanje linija i tačaka
 void renderLine(const unsigned int shaderProgram, const unsigned int VAO,
                 float x1, float y1, float x2, float y2, float thickness = 0.005f) {
     glUseProgram(shaderProgram);
 
-    // Izračunaj sredinu i rotaciju za liniju
     float dx = x2 - x1;
     float dy = y2 - y1;
     float length = std::sqrt(dx * dx + dy * dy);
@@ -162,7 +158,6 @@ void renderLine(const unsigned int shaderProgram, const unsigned int VAO,
     const int modelLoc = glGetUniformLocation(shaderProgram, "model");
     glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
 
-    // Koristi belu boju za linije
     glUniform3f(glGetUniformLocation(shaderProgram, "customColor"), 1.0f, 1.0f, 1.0f);
     glUniform1i(glGetUniformLocation(shaderProgram, "useCustomColor"), 1);
 
@@ -170,7 +165,6 @@ void renderLine(const unsigned int shaderProgram, const unsigned int VAO,
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
     glBindVertexArray(0);
 
-    // Resetuj flag za custom boju
     glUniform1i(glGetUniformLocation(shaderProgram, "useCustomColor"), 0);
 }
 
@@ -185,7 +179,6 @@ void renderPoint(const unsigned int shaderProgram, const unsigned int VAO,
     const int modelLoc = glGetUniformLocation(shaderProgram, "model");
     glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
 
-    // Koristi belu boju za tačke
     glUniform3f(glGetUniformLocation(shaderProgram, "customColor"), 1.0f, 1.0f, 1.0f);
     glUniform1i(glGetUniformLocation(shaderProgram, "useCustomColor"), 1);
 
@@ -193,7 +186,6 @@ void renderPoint(const unsigned int shaderProgram, const unsigned int VAO,
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
     glBindVertexArray(0);
 
-    // Resetuj flag za custom boju
     glUniform1i(glGetUniformLocation(shaderProgram, "useCustomColor"), 0);
 }
 
@@ -259,7 +251,6 @@ int main() {
     glBindVertexArray(VAO);
 
     constexpr float vertices[] = {
-        // positions        // uv
         0.5f, 0.5f, 0.0f, 1.0f, 1.0f,
         0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
         -0.5f, -0.5f, 0.0f, 0.0f, 0.0f,
@@ -282,7 +273,6 @@ int main() {
     glBindVertexArray(0);
 
     int screenWidth, screenHeight;
-
     float mapPosX = 0.0f;
     float mapPosY = 0.0f;
 
@@ -307,6 +297,7 @@ int main() {
     constexpr double FRAME_TIME = 1.0 / TARGET_FPS;
 
     static bool leftMousePressed = false;
+
     while (!glfwWindowShouldClose(window)) {
         auto frameStart = std::chrono::high_resolution_clock::now();
 
@@ -315,7 +306,6 @@ int main() {
 
         static double lastSwitchTime = 0.0;
         const double currentTime = glfwGetTime();
-
         bool switchRequested = false;
 
         if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS && currentTime - lastSwitchTime > 0.2) {
@@ -334,16 +324,13 @@ int main() {
 
         if (switchRequested) {
             if (isWalkingMode) {
-                // Sačuvaj stanje hodanja
                 walkingState.mapPosX = mapPosX;
                 walkingState.mapPosY = mapPosY;
                 walkingState.totalDistance = totalDistanceWalked;
 
-                // Resetuj poziciju mape za merenje
                 mapPosX = 0.0f;
                 mapPosY = 0.0f;
             } else {
-                // Vrati stanje hodanja
                 mapPosX = walkingState.mapPosX;
                 mapPosY = walkingState.mapPosY;
                 totalDistanceWalked = walkingState.totalDistance;
@@ -373,23 +360,12 @@ int main() {
 
             renderImage(shaderProgram, VAO, bgImage.textureID, mapPosX, mapPosY, mapScale, mapScale);
             renderPin(shaderProgram, VAO, pinImage.textureID);
-            renderModeIndicator(shaderProgram, VAO, walkingModeIndicator, screenWidth, screenHeight, isWalkingMode);
+            renderModeIndicator(shaderProgram, VAO, walkingModeIndicator, screenWidth, screenHeight);
             renderNumber(shaderProgram, VAO, digitTextures, totalDistanceWalked, -0.95f, 0.9f, 0.05f);
         } else {
-            const float screenAspectRatio = static_cast<float>(screenWidth) / static_cast<float>(screenHeight);
-            const float mapAspectRatio = static_cast<float>(bgImage.width) / static_cast<float>(bgImage.height);
-
-            float mapScaleX, mapScaleY;
-            if (screenAspectRatio > mapAspectRatio) {
-                mapScaleY = 2.0f;
-                mapScaleX = mapScaleY * mapAspectRatio / screenAspectRatio;
-            } else {
-                mapScaleX = 2.0f;
-                mapScaleY = mapScaleX * screenAspectRatio / mapAspectRatio;
-            }
-
-            renderImage(shaderProgram, VAO, bgImage.textureID, 0.0f, 0.0f, mapScaleX, mapScaleY);
-            renderModeIndicator(shaderProgram, VAO, measuringModeIndicator, screenWidth, screenHeight, isWalkingMode);
+            // --- Fullscreen map ---
+            renderImage(shaderProgram, VAO, bgImage.textureID, 0.0f, 0.0f, 2.0f, 2.0f);
+            renderModeIndicator(shaderProgram, VAO, measuringModeIndicator, screenWidth, screenHeight);
 
             for (size_t i = 0; i < measuringState.points.size(); ++i) {
                 const Point &p = measuringState.points[i];
@@ -464,13 +440,12 @@ int main() {
                         const Point &prev = measuringState.points[measuringState.points.size() - 2];
                         const Point &curr = measuringState.points.back();
 
-                        constexpr float walkingMapScale = 8.0f;
                         float ndcDistance = std::sqrt(
                             (prev.x - curr.x) * (prev.x - curr.x) +
                             (prev.y - curr.y) * (prev.y - curr.y)
                         );
 
-                        float convertedDistance = ndcDistance * walkingMapScale * 2.0f;
+                        float convertedDistance = ndcDistance * 2.0f; // full-screen map scale
                         measuringState.totalMeasuredDistance += convertedDistance;
                     }
                 }
@@ -481,7 +456,7 @@ int main() {
             }
         }
 
-        renderImageBottomRight(shaderProgram, VAO, cornerImage, screenWidth, screenHeight, mapPosX, mapPosY);
+        renderImageBottomRight(shaderProgram, VAO, cornerImage, screenWidth, screenHeight);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
