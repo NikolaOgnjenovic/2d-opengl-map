@@ -25,20 +25,16 @@ if(WIN32)
     # find_package(glfw3 CONFIG REQUIRED)
 
     # Option 2: Build GLFW from source (recommended for portability)
-    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/packages/glfw)
-        add_subdirectory(packages/glfw)
-    else()
-        message(WARNING "GLFW not found in packages/glfw. Download it from https://github.com/glfw/glfw")
-        # Or use FetchContent to download it automatically:
-        # include(FetchContent)
-        # FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw.git)
-        # FetchContent_MakeAvailable(glfw)
-    endif()
+    include(FetchContent)
+    FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw.git GIT_TAG 3.3.8) # Using 3.3.8 for stability
+    FetchContent_Declare(glm GIT_REPOSITORY https://github.com/g-truc/glm.git GIT_TAG 1.0.1)
+    FetchContent_MakeAvailable(glfw glm)
 
     # Link libraries
     target_link_libraries(Kostur
             glad
             glfw
+            glm::glm
             opengl32
             gdi32
     )
