@@ -9,7 +9,13 @@ target_include_directories(glad PUBLIC packages/glad/include)
 
 # --- Main executable ---
 file(GLOB SRC_FILES src/*.cpp)
-add_executable(Kostur ${SRC_FILES})
+add_executable(Kostur ${SRC_FILES}
+        Header/model.hpp
+        Header/mesh.hpp
+        Header/shader.hpp
+        Header/ground.hpp
+        src/ground.cpp
+        src/ground.h)
 
 # --- Common includes ---
 target_include_directories(Kostur PRIVATE
@@ -28,13 +34,21 @@ if(WIN32)
     include(FetchContent)
     FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw.git GIT_TAG 3.3.8) # Using 3.3.8 for stability
     FetchContent_Declare(glm GIT_REPOSITORY https://github.com/g-truc/glm.git GIT_TAG 1.0.1)
-    FetchContent_MakeAvailable(glfw glm)
+    FetchContent_Declare(assimp GIT_REPOSITORY https://github.com/assimp/assimp.git GIT_TAG v5.2.5)
+    
+    set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
+    set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
+    set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
+
+    FetchContent_MakeAvailable(glfw glm assimp)
 
     # Link libraries
     target_link_libraries(Kostur
             glad
             glfw
             glm::glm
+            assimp::assimp
             opengl32
             gdi32
     )
