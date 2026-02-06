@@ -9,8 +9,12 @@
 #include "../Header/Util.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include "stb_image.h"
+#include "../Header/shader.hpp"
+#include "../Header/model.hpp"
+#include "../Header/ground.hpp"
 
 // ============================================================================
 // GLOBALS & STRUCTS
@@ -24,10 +28,10 @@ struct TextureData {
 };
 
 struct Point {
-    float x, y;
+    float x, z;
 
     bool operator==(const Point &other) const {
-        return std::abs(x - other.x) < 0.001f && std::abs(y - other.y) < 0.001f;
+        return std::abs(x - other.x) < 0.001f && std::abs(z - other.z) < 0.001f;
     }
 };
 
@@ -37,8 +41,9 @@ struct DigitTextures {
 };
 
 struct WalkingState {
-    float mapPosX;
-    float mapPosY;
+    float charPosX;
+    float charPosZ;
+    float charRotation;
     float totalDistance;
 };
 
@@ -83,6 +88,7 @@ DigitTextures loadDigitTextures() {
 void renderImage(const unsigned int shaderProgram, const unsigned int VAO, const unsigned int textureID,
                  const float x, const float y, const float scaleX, const float scaleY) {
     glUseProgram(shaderProgram);
+    glDisable(GL_DEPTH_TEST); // HUD elements shouldn't be depth tested
 
     auto model = glm::mat4(1.0f);
     model = glm::translate(model, glm::vec3(x, y, 0.0f));
@@ -95,10 +101,12 @@ void renderImage(const unsigned int shaderProgram, const unsigned int VAO, const
     glBindTexture(GL_TEXTURE_2D, textureID);
 
     glUniform1i(glGetUniformLocation(shaderProgram, "texture1"), 0);
+    glUniform1i(glGetUniformLocation(shaderProgram, "useCustomColor"), 0);
 
     glBindVertexArray(VAO);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
     glBindVertexArray(0);
+    glEnable(GL_DEPTH_TEST);
 }
 
 void renderImageBottomRight(const unsigned int shaderProgram,
@@ -133,11 +141,6 @@ void renderModeIndicator(const unsigned int shaderProgram,
     renderImage(shaderProgram, VAO, tex.textureID, posX, posY, scaleX, scaleY);
 }
 
-void renderPin(const unsigned int shaderProgram, const unsigned int VAO, const unsigned int textureID) {
-    constexpr float pinScale = 0.05f;
-    renderImage(shaderProgram, VAO, textureID, 0.0f, 0.0f, pinScale, pinScale);
-}
-
 void renderNumber(const unsigned int shaderProgram, const unsigned int VAO,
                   const DigitTextures &dt, const float number, const float x, const float y, const float scale) {
     const std::string s = std::to_string(number);
@@ -155,55 +158,90 @@ void renderNumber(const unsigned int shaderProgram, const unsigned int VAO,
     }
 }
 
-void renderLine(const unsigned int shaderProgram, const unsigned int VAO,
-                float x1, float y1, float x2, float y2, float thickness = 0.005f) {
-    glUseProgram(shaderProgram);
-
-    float dx = x2 - x1;
-    float dy = y2 - y1;
-    float length = std::sqrt(dx * dx + dy * dy);
-    float angle = std::atan2(dy, dx);
-
-    float midX = (x1 + x2) / 2.0f;
-    float midY = (y1 + y2) / 2.0f;
-
-    auto model = glm::mat4(1.0f);
-    model = glm::translate(model, glm::vec3(midX, midY, 0.0f));
-    model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
-    model = glm::scale(model, glm::vec3(length, thickness, 1.0f));
-
-    const int modelLoc = glGetUniformLocation(shaderProgram, "model");
-    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
-
-    glUniform3f(glGetUniformLocation(shaderProgram, "customColor"), 1.0f, 1.0f, 1.0f);
-    glUniform1i(glGetUniformLocation(shaderProgram, "useCustomColor"), 1);
-
-    glBindVertexArray(VAO);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+// Simple Primitive Generator
+unsigned int cubeVAO = 0, cubeVBO = 0;
+void renderCube() {
+    if (cubeVAO == 0) {
+        float vertices[] = {
+            // back face
+            -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 0.0f, 0.0f, // bottom-left
+             0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 1.0f, 1.0f, // top-right
+             0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 1.0f, 0.0f, // bottom-right         
+             0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 1.0f, 1.0f, // top-right
+            -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 0.0f, 0.0f, // bottom-left
+            -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 0.0f, 1.0f, // top-left
+            // front face
+            -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 0.0f, 0.0f, // bottom-left
+             0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 1.0f, 0.0f, // bottom-right
+             0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 1.0f, 1.0f, // top-right
+             0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 1.0f, 1.0f, // top-right
+            -0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 0.0f, 1.0f, // top-left
+            -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 0.0f, 0.0f, // bottom-left
+            // left face
+            -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-right
+            -0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f, 1.0f, 1.0f, // top-left
+            -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-left
+            -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-left
+            -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f, 0.0f, 0.0f, // bottom-right
+            -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-right
+            // right face
+             0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-left
+             0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-right
+             0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f, 1.0f, 1.0f, // top-right         
+             0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-right
+             0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-left
+             0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f, 0.0f, 0.0f, // bottom-left     
+            // bottom face
+            -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f, 0.0f, 1.0f, // top-right
+             0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f, 1.0f, 1.0f, // top-left
+             0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f, 1.0f, 0.0f, // bottom-left
+             0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f, 1.0f, 0.0f, // bottom-left
+            -0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f, 0.0f, 0.0f, // bottom-right
+            -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f, 0.0f, 1.0f, // top-right
+            // top face
+            -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f, 0.0f, 1.0f, // top-left
+             0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f, 1.0f, 0.0f, // bottom-right
+             0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f, 1.0f, 1.0f, // top-right     
+             0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f, 1.0f, 0.0f, // bottom-right
+            -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f, 0.0f, 1.0f, // top-left
+            -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f, 0.0f, 0.0f  // bottom-left        
+        };
+        glGenVertexArrays(1, &cubeVAO);
+        glGenBuffers(1, &cubeVBO);
+        glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+        glBindVertexArray(cubeVAO);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+    }
+    glBindVertexArray(cubeVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
     glBindVertexArray(0);
-
-    glUniform1i(glGetUniformLocation(shaderProgram, "useCustomColor"), 0);
 }
 
-void renderPoint(const unsigned int shaderProgram, const unsigned int VAO,
-                 float x, float y, float size = 0.02f) {
-    glUseProgram(shaderProgram);
-
+void renderLine3D(const Shader &shader, float x1, float z1, float x2, float z2, float thickness = 0.05f) {
+    shader.use();
+    float dx = x2 - x1;
+    float dz = z2 - z1;
+    float length = std::sqrt(dx * dx + dz * dz);
+    float angle = std::atan2(dz, dx);
+    float midX = (x1 + x2) / 2.0f;
+    float midZ = (z1 + z2) / 2.0f;
     auto model = glm::mat4(1.0f);
-    model = glm::translate(model, glm::vec3(x, y, 0.0f));
-    model = glm::scale(model, glm::vec3(size, size, 1.0f));
-
-    const int modelLoc = glGetUniformLocation(shaderProgram, "model");
-    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
-
-    glUniform3f(glGetUniformLocation(shaderProgram, "customColor"), 1.0f, 1.0f, 1.0f);
-    glUniform1i(glGetUniformLocation(shaderProgram, "useCustomColor"), 1);
-
-    glBindVertexArray(VAO);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
-    glBindVertexArray(0);
-
-    glUniform1i(glGetUniformLocation(shaderProgram, "useCustomColor"), 0);
+    model = glm::translate(model, glm::vec3(midX, 0.01f, midZ));
+    model = glm::rotate(model, -angle, glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::scale(model, glm::vec3(length, 0.02f, thickness));
+    shader.setMat4("model", model);
+    shader.setVec3("color", 1.0f, 1.0f, 1.0f);
+    shader.setBool("useColor", true);
+    shader.setBool("isEmissive", true);
+    renderCube();
 }
 
 // ============================================================================
@@ -234,18 +272,37 @@ void keyCallback(GLFWwindow *window, const int key, int scancode, const int acti
 // MEASURING MODE HELPER FUNCTIONS
 // ============================================================================
 void handleMeasuringModeClick(MeasuringState &measuringState, double mouseX, double mouseY,
-                              int screenWidth, int screenHeight, float mapScale, float fullscreenScale) {
-    float ndcX = static_cast<float>(mouseX) / screenWidth * 2.0f - 1.0f;
-    float ndcY = 1.0f - static_cast<float>(mouseY) / screenHeight * 2.0f;
+                              int screenWidth, int screenHeight, float mapSize, glm::mat4 view, glm::mat4 projection) {
+    // Raycasting to find position on the map (y=0 plane)
+    float x = (2.0f * mouseX) / screenWidth - 1.0f;
+    float y = 1.0f - (2.0f * mouseY) / screenHeight;
+    glm::vec4 ray_clip = glm::vec4(x, y, -1.0, 1.0);
+    glm::vec4 ray_eye = glm::inverse(projection) * ray_clip;
+    ray_eye = glm::vec4(ray_eye.x, ray_eye.y, -1.0, 0.0);
+    glm::vec3 ray_wor = glm::vec3(glm::inverse(view) * ray_eye);
+    ray_wor = glm::normalize(ray_wor);
+
+    glm::vec3 camPos = glm::vec3(glm::inverse(view)[3]);
+    
+    // Intersection with y=0 plane: camPos.y + t * ray_wor.y = 0  => t = -camPos.y / ray_wor.y
+    if (std::abs(ray_wor.y) < 0.0001f) return;
+    float t = -camPos.y / ray_wor.y;
+    if (t < 0) return;
+    
+    glm::vec3 worldPos = camPos + t * ray_wor;
+
+    // Check if within map bounds
+    float halfSize = mapSize / 2.0f;
+    if (worldPos.x < -halfSize || worldPos.x > halfSize || worldPos.z < -halfSize || worldPos.z > halfSize) return;
 
     bool clickedOnExistingPoint = false;
     size_t clickedIndex = 0;
 
     for (size_t i = 0; i < measuringState.points.size(); ++i) {
         const Point &p = measuringState.points[i];
-        float dist = std::sqrt((p.x - ndcX) * (p.x - ndcX) + (p.y - ndcY) * (p.y - ndcY));
+        float dist = std::sqrt((p.x - worldPos.x) * (p.x - worldPos.x) + (p.z - worldPos.z) * (p.z - worldPos.z));
 
-        if (dist < 0.03f) {
+        if (dist < 0.5f) { // Threshold in world units
             clickedOnExistingPoint = true;
             clickedIndex = i;
             break;
@@ -253,40 +310,18 @@ void handleMeasuringModeClick(MeasuringState &measuringState, double mouseX, dou
     }
 
     if (clickedOnExistingPoint) {
-        // Recalculate total distance from scratch to avoid accumulation errors
-        measuringState.totalMeasuredDistance = 0.0f;
-
-        // Remove the clicked point
         measuringState.points.erase(measuringState.points.begin() + clickedIndex);
-
-        // Recalculate total distance for remaining points
-        for (size_t i = 1; i < measuringState.points.size(); ++i) {
-            const Point &prev = measuringState.points[i - 1];
-            const Point &curr = measuringState.points[i];
-
-            float ndcDistance = std::sqrt(
-                (prev.x - curr.x) * (prev.x - curr.x) +
-                (prev.y - curr.y) * (prev.y - curr.y)
-            );
-
-            float convertedDistance = ndcDistance * (mapScale / fullscreenScale);
-            measuringState.totalMeasuredDistance += convertedDistance;
-        }
     } else {
-        measuringState.points.push_back({ndcX, ndcY});
+        measuringState.points.push_back({worldPos.x, worldPos.z});
+    }
 
-        if (measuringState.points.size() > 1) {
-            const Point &prev = measuringState.points[measuringState.points.size() - 2];
-            const Point &curr = measuringState.points.back();
-
-            float ndcDistance = std::sqrt(
-                (prev.x - curr.x) * (prev.x - curr.x) +
-                (prev.y - curr.y) * (prev.y - curr.y)
-            );
-
-            float convertedDistance = ndcDistance * (mapScale / fullscreenScale);
-            measuringState.totalMeasuredDistance += convertedDistance;
-        }
+    // Recalculate total distance
+    measuringState.totalMeasuredDistance = 0.0f;
+    for (size_t i = 1; i < measuringState.points.size(); ++i) {
+        const Point &prev = measuringState.points[i - 1];
+        const Point &curr = measuringState.points[i];
+        float d = std::sqrt((prev.x - curr.x) * (prev.x - curr.x) + (prev.z - curr.z) * (prev.z - curr.z));
+        measuringState.totalMeasuredDistance += d;
     }
 }
 
@@ -318,17 +353,14 @@ bool shouldSwitchMode(GLFWwindow *window, bool isWalkingMode, double currentTime
 }
 
 void performModeSwitch(bool &isWalkingMode, WalkingState &walkingState, MeasuringState &measuringState,
-                       float &mapPosX, float &mapPosY, float &totalDistanceWalked) {
+                       float &charPosX, float &charPosZ, float &totalDistanceWalked) {
     if (isWalkingMode) {
-        walkingState.mapPosX = mapPosX;
-        walkingState.mapPosY = mapPosY;
+        walkingState.charPosX = charPosX;
+        walkingState.charPosZ = charPosZ;
         walkingState.totalDistance = totalDistanceWalked;
-
-        mapPosX = 0.0f;
-        mapPosY = 0.0f;
     } else {
-        mapPosX = walkingState.mapPosX;
-        mapPosY = walkingState.mapPosY;
+        charPosX = walkingState.charPosX;
+        charPosZ = walkingState.charPosZ;
         totalDistanceWalked = walkingState.totalDistance;
     }
 
@@ -338,53 +370,93 @@ void performModeSwitch(bool &isWalkingMode, WalkingState &walkingState, Measurin
 // ============================================================================
 // RENDER MODES
 // ============================================================================
-void renderWalkingMode(const unsigned int shaderProgram, const unsigned int VAO,
-                       const TextureData &bgImage, const TextureData &pinImage,
-                       const TextureData &modeIndicator, const DigitTextures &digitTextures,
-                       float &mapPosX, float &mapPosY, float &totalDistanceWalked,
+void renderWalkingMode(const Shader &sceneShader, const TextureData &modeIndicator, const unsigned int hudShader, const unsigned int hudVAO, 
+                       const DigitTextures &digitTextures,
+                       float &charPosX, float &charPosZ, float &charRot, float &totalDistanceWalked,
                        GLFWwindow *window, int screenWidth, int screenHeight,
-                       float mapSpeed, double targetFPS, float mapScale) {
-    // Handle movement
-    float moveX = 0.0f;
-    float moveY = 0.0f;
+                       float speed, double targetFPS, float mapSize) {
+    
+    float oldX = charPosX;
+    float oldZ = charPosZ;
+    bool moved = false;
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) moveY = -mapSpeed / targetFPS;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) moveY = mapSpeed / targetFPS;
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) moveX = mapSpeed / targetFPS;
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) moveX = -mapSpeed / targetFPS;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) { charPosZ -= speed / targetFPS; charRot = 180.0f; moved = true; }
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) { charPosZ += speed / targetFPS; charRot = 0.0f; moved = true; }
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) { charPosX -= speed / targetFPS; charRot = -90.0f; moved = true; }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) { charPosX += speed / targetFPS; charRot = 90.0f; moved = true; }
 
-    mapPosX += moveX;
-    mapPosY += moveY;
-    totalDistanceWalked += std::sqrt(moveX * moveX + moveY * moveY);
+    // Constraints
+    float limit = mapSize / 2.0f;
+    charPosX = std::clamp(charPosX, -limit, limit);
+    charPosZ = std::clamp(charPosZ, -limit, limit);
 
-    // Render scene
-    renderImage(shaderProgram, VAO, bgImage.textureID, mapPosX, mapPosY, mapScale, mapScale);
-    renderPin(shaderProgram, VAO, pinImage.textureID);
-    renderModeIndicator(shaderProgram, VAO, modeIndicator, screenWidth, screenHeight);
-    renderNumber(shaderProgram, VAO, digitTextures, totalDistanceWalked, -0.95f, 0.9f, 0.05f);
+    if (moved) {
+        float dx = charPosX - oldX;
+        float dz = charPosZ - oldZ;
+        totalDistanceWalked += std::sqrt(dx * dx + dz * dz);
+    }
+
+    // Render character (Cube as placeholder)
+    sceneShader.use();
+    auto modelMat = glm::mat4(1.0f);
+    modelMat = glm::translate(modelMat, glm::vec3(charPosX, 0.5f, charPosZ));
+    modelMat = glm::rotate(modelMat, glm::radians(charRot), glm::vec3(0.0f, 1.0f, 0.0f));
+    sceneShader.setMat4("model", modelMat);
+    sceneShader.setVec3("color", 0.0f, 0.0f, 1.0f);
+    sceneShader.setBool("useColor", true);
+    renderCube();
+
+    // Render HUD
+    renderModeIndicator(hudShader, hudVAO, modeIndicator, screenWidth, screenHeight);
+    renderNumber(hudShader, hudVAO, digitTextures, totalDistanceWalked, -0.95f, 0.9f, 0.05f);
 }
 
-void renderMeasuringMode(const unsigned int shaderProgram, const unsigned int VAO,
-                         const TextureData &bgImage, const TextureData &modeIndicator,
+void renderMeasuringMode(const Shader &sceneShader,
+                         const TextureData &modeIndicator, const unsigned int hudShader, const unsigned int hudVAO,
                          const DigitTextures &digitTextures, MeasuringState &measuringState,
                          GLFWwindow *window, int screenWidth, int screenHeight,
-                         float fullscreenScale, float mapScale, bool &leftMousePressed) {
-    // Render fullscreen map
-    renderImage(shaderProgram, VAO, bgImage.textureID, 0.0f, 0.0f, fullscreenScale, fullscreenScale);
-    renderModeIndicator(shaderProgram, VAO, modeIndicator, screenWidth, screenHeight);
-
-    // Render points and lines
+                         float mapSize, glm::mat4 view, glm::mat4 projection, bool &leftMousePressed) {
+    
+    // Render pins and lines
+    sceneShader.use();
     for (size_t i = 0; i < measuringState.points.size(); ++i) {
         const Point &p = measuringState.points[i];
-        renderPoint(shaderProgram, VAO, p.x, p.y);
+        
+        // Needle
+        auto modelMat = glm::mat4(1.0f);
+        modelMat = glm::translate(modelMat, glm::vec3(p.x, 0.25f, p.z));
+        modelMat = glm::scale(modelMat, glm::vec3(0.05f, 0.5f, 0.05f));
+        sceneShader.setMat4("model", modelMat);
+        sceneShader.setVec3("color", 0.5f, 0.5f, 0.5f);
+        sceneShader.setBool("useColor", true);
+        renderCube();
+
+        // Ball
+        modelMat = glm::mat4(1.0f);
+        modelMat = glm::translate(modelMat, glm::vec3(p.x, 0.5f, p.z));
+        modelMat = glm::scale(modelMat, glm::vec3(0.2f));
+        sceneShader.setMat4("model", modelMat);
+        sceneShader.setVec3("color", 1.0f, 0.0f, 0.0f);
+        sceneShader.setBool("isEmissive", true);
+        renderCube();
+        sceneShader.setBool("isEmissive", false);
+
+        // Point light for pin
+        std::string prefix = "pointLights[" + std::to_string(i) + "].";
+        sceneShader.setVec3(prefix + "position", p.x, 0.5f, p.z);
+        sceneShader.setVec3(prefix + "color", 1.0f, 0.0f, 0.0f);
+        sceneShader.setFloat(prefix + "intensity", 2.0f);
 
         if (i > 0) {
             const Point &prev = measuringState.points[i - 1];
-            renderLine(shaderProgram, VAO, prev.x, prev.y, p.x, p.y);
+            renderLine3D(sceneShader, prev.x, prev.z, p.x, p.z);
         }
     }
+    sceneShader.setInt("nrPointLights", static_cast<int>(measuringState.points.size()));
 
-    renderNumber(shaderProgram, VAO, digitTextures, measuringState.totalMeasuredDistance, -0.95f, 0.9f, 0.05f);
+    // Render HUD
+    renderModeIndicator(hudShader, hudVAO, modeIndicator, screenWidth, screenHeight);
+    renderNumber(hudShader, hudVAO, digitTextures, measuringState.totalMeasuredDistance, -0.95f, 0.9f, 0.05f);
 
     // Handle mouse input
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !leftMousePressed) {
@@ -392,8 +464,10 @@ void renderMeasuringMode(const unsigned int shaderProgram, const unsigned int VA
         double mouseX, mouseY;
         glfwGetCursorPos(window, &mouseX, &mouseY);
 
-        handleMeasuringModeClick(measuringState, mouseX, mouseY, screenWidth, screenHeight,
-                                 mapScale, fullscreenScale);
+        if (!isMouseOverIndicator(mouseX, mouseY, screenWidth, screenHeight, modeIndicator)) {
+            handleMeasuringModeClick(measuringState, mouseX, mouseY, screenWidth, screenHeight,
+                                     mapSize, view, projection);
+        }
     }
 
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE) {
@@ -505,8 +579,9 @@ int main() {
 
     // Game state
     int screenWidth, screenHeight;
-    float mapPosX = 0.0f;
-    float mapPosY = 0.0f;
+    float charPosX = 0.0f;
+    float charPosZ = 0.0f;
+    float charRot = 0.0f;
     bool isWalkingMode = true;
     float totalDistanceWalked = 0.0f;
 
@@ -516,39 +591,79 @@ int main() {
     // Timing constants
     constexpr double TARGET_FPS = 75.0;
     constexpr double FRAME_TIME = 1.0 / TARGET_FPS;
-    constexpr float MAP_SPEED = 0.4f;
-    constexpr float MAP_SCALE = 8.0f;
-    constexpr float FULLSCREEN_SCALE = 2.0f;
+    constexpr float MAP_SPEED = 5.0f;
+    constexpr float MAP_SIZE = 20.0f;
+
+    // Load 3D Models (Placeholders)
+    Ground mapGround(MAP_SIZE, MAP_SIZE, 1, bgImage.textureID);
+    // Since we don't have model files yet, we can use simple cubes or 
+    // load models if the user provides them. For now I'll use placeholders.
+    // I will create a simple cube-based humanoid placeholder if needed.
+    
+    // For now, let's assume we use renderCube() for char and pins if models not loaded
+    // or just use Model with empty path which might fail.
+    // Let's use a simple cube for the humanoid and pin ball for now.
+
+    Shader sceneShader("../resources/shaders/scene.vert", "../resources/shaders/scene.frag");
+    Shader hudShaderObj("../resources/shaders/hud.vert", "../resources/shaders/hud.frag");
 
     // Input state
     static bool leftMousePressed = false;
     double lastSwitchTime = 0.0;
+
+    glEnable(GL_DEPTH_TEST);
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
         auto frameStart = std::chrono::high_resolution_clock::now();
 
         glfwGetWindowSize(window, &screenWidth, &screenHeight);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Handle mode switching
         double currentTime = glfwGetTime();
         if (shouldSwitchMode(window, isWalkingMode, currentTime, lastSwitchTime,
                              screenWidth, screenHeight, walkingModeIndicator, measuringModeIndicator)) {
             performModeSwitch(isWalkingMode, walkingState, measuringState,
-                              mapPosX, mapPosY, totalDistanceWalked);
+                              charPosX, charPosZ, totalDistanceWalked);
             lastSwitchTime = currentTime;
         }
 
+        // Camera setup
+        float camY = isWalkingMode ? 5.0f : 15.0f;
+        glm::vec3 camPos = glm::vec3(0.0f, camY, 10.0f);
+        if (isWalkingMode) {
+            camPos = glm::vec3(charPosX, camY, charPosZ + 5.0f);
+        }
+        glm::mat4 view = glm::lookAt(camPos, glm::vec3(camPos.x, 0.0f, camPos.z - 5.0f), glm::vec3(0, 1, 0));
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)screenWidth / screenHeight, 0.1f, 100.0f);
+
+        sceneShader.use();
+        sceneShader.setMat4("view", view);
+        sceneShader.setMat4("projection", projection);
+        sceneShader.setVec3("viewPos", camPos);
+        
+        // Global light
+        sceneShader.setVec3("globalLightPos", 0.0f, 10.0f, 0.0f);
+        sceneShader.setVec3("globalLightColor", 1.0f, 1.0f, 1.0f);
+        sceneShader.setFloat("globalLightIntensity", 0.5f);
+
+        // Render Ground
+        auto modelMat = glm::mat4(1.0f);
+        sceneShader.setMat4("model", modelMat);
+        sceneShader.setBool("useColor", false);
+        sceneShader.setBool("isEmissive", false);
+        mapGround.Draw(sceneShader);
+
         // Render current mode
         if (isWalkingMode) {
-            renderWalkingMode(shaderProgram, VAO, bgImage, pinImage, walkingModeIndicator,
-                              digitTextures, mapPosX, mapPosY, totalDistanceWalked,
-                              window, screenWidth, screenHeight, MAP_SPEED, TARGET_FPS, MAP_SCALE);
+            renderWalkingMode(sceneShader, walkingModeIndicator, hudShaderObj.ID, VAO, digitTextures,
+                              charPosX, charPosZ, charRot, totalDistanceWalked,
+                              window, screenWidth, screenHeight, MAP_SPEED, TARGET_FPS, MAP_SIZE);
         } else {
-            renderMeasuringMode(shaderProgram, VAO, bgImage, measuringModeIndicator,
-                                digitTextures, measuringState, window, screenWidth, screenHeight,
-                                FULLSCREEN_SCALE, MAP_SCALE, leftMousePressed);
+            renderMeasuringMode(sceneShader, measuringModeIndicator, hudShaderObj.ID, VAO, digitTextures,
+                                measuringState, window, screenWidth, screenHeight,
+                                MAP_SIZE, view, projection, leftMousePressed);
         }
 
         // Render UI overlay

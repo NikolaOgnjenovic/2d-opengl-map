@@ -34,8 +34,9 @@ void Ground::generateGroundMesh(float width, float depth, int subdivisions) {
             vertex.Position = glm::vec3(startX + j * dx, 0.0f, startZ + i * dz);
             vertex.Normal = glm::vec3(0, 1, 0);
 
-            float repeat = 1.0f; // broj puta da se tekstura ponovi po kvadratu tj subdivision-u
-            vertex.TexCoords = glm::vec2(j * repeat, i * repeat);
+            float tx = (float)j / subdivisions;
+            float ty = (float)i / subdivisions;
+            vertex.TexCoords = glm::vec2(tx, ty);
 
             vertices.push_back(vertex);
         }
