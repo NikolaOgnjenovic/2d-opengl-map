@@ -1,4 +1,4 @@
-#include "ground.hpp"
+#include "ground.h"
 
 // konstruktor
 Ground::Ground(float width, float depth, int subdivisions, unsigned int texID)

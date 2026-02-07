@@ -6,15 +6,15 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-#include "../Header/Util.h"
+#include "Util.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 #include "stb_image.h"
-#include "../Header/shader.hpp"
-#include "../Header/model.hpp"
-#include "../Header/ground.hpp"
+#include "shader.h"
+#include "model.h"
+#include "ground.h"
 
 // ============================================================================
 // GLOBALS & STRUCTS
@@ -370,7 +370,7 @@ void performModeSwitch(bool &isWalkingMode, WalkingState &walkingState, Measurin
 // ============================================================================
 // RENDER MODES
 // ============================================================================
-void renderWalkingMode(const Shader &sceneShader, const TextureData &modeIndicator, const unsigned int hudShader, const unsigned int hudVAO, 
+void renderWalkingMode(const Shader &sceneShader, Model &humanModel, const TextureData &modeIndicator, const unsigned int hudShader, const unsigned int hudVAO, 
                        const DigitTextures &digitTextures,
                        float &charPosX, float &charPosZ, float &charRot, float &totalDistanceWalked,
                        GLFWwindow *window, int screenWidth, int screenHeight,
@@ -380,10 +380,22 @@ void renderWalkingMode(const Shader &sceneShader, const TextureData &modeIndicat
     float oldZ = charPosZ;
     bool moved = false;
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) { charPosZ -= speed / targetFPS; charRot = 180.0f; moved = true; }
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) { charPosZ += speed / targetFPS; charRot = 0.0f; moved = true; }
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) { charPosX -= speed / targetFPS; charRot = -90.0f; moved = true; }
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) { charPosX += speed / targetFPS; charRot = 90.0f; moved = true; }
+    float moveX = 0.0f;
+    float moveZ = 0.0f;
+
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) { moveZ -= 1.0f; moved = true; }
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) { moveZ += 1.0f; moved = true; }
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) { moveX -= 1.0f; moved = true; }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) { moveX += 1.0f; moved = true; }
+
+    if (moved) {
+        float angle = std::atan2(moveX, moveZ);
+        charRot = glm::degrees(angle);
+
+        glm::vec2 direction = glm::normalize(glm::vec2(moveX, moveZ));
+        charPosX += direction.x * (speed / targetFPS);
+        charPosZ += direction.y * (speed / targetFPS);
+    }
 
     // Constraints
     float limit = mapSize / 2.0f;
@@ -396,15 +408,15 @@ void renderWalkingMode(const Shader &sceneShader, const TextureData &modeIndicat
         totalDistanceWalked += std::sqrt(dx * dx + dz * dz);
     }
 
-    // Render character (Cube as placeholder)
+    // Render character (Human Model)
     sceneShader.use();
     auto modelMat = glm::mat4(1.0f);
-    modelMat = glm::translate(modelMat, glm::vec3(charPosX, 0.5f, charPosZ));
+    modelMat = glm::translate(modelMat, glm::vec3(charPosX, 0.0f, charPosZ));
     modelMat = glm::rotate(modelMat, glm::radians(charRot), glm::vec3(0.0f, 1.0f, 0.0f));
+    modelMat = glm::scale(modelMat, glm::vec3(0.2f)); // Adjust scale as needed
     sceneShader.setMat4("model", modelMat);
-    sceneShader.setVec3("color", 0.0f, 0.0f, 1.0f);
-    sceneShader.setBool("useColor", true);
-    renderCube();
+    sceneShader.setBool("useColor", false);
+    humanModel.Draw(const_cast<Shader&>(sceneShader));
 
     // Render HUD
     renderModeIndicator(hudShader, hudVAO, modeIndicator, screenWidth, screenHeight);
@@ -594,15 +606,9 @@ int main() {
     constexpr float MAP_SPEED = 5.0f;
     constexpr float MAP_SIZE = 20.0f;
 
-    // Load 3D Models (Placeholders)
+    // Load 3D Models
     Ground mapGround(MAP_SIZE, MAP_SIZE, 1, bgImage.textureID);
-    // Since we don't have model files yet, we can use simple cubes or 
-    // load models if the user provides them. For now I'll use placeholders.
-    // I will create a simple cube-based humanoid placeholder if needed.
-    
-    // For now, let's assume we use renderCube() for char and pins if models not loaded
-    // or just use Model with empty path which might fail.
-    // Let's use a simple cube for the humanoid and pin ball for now.
+    Model humanModel("../resources/models/human.OBJ");
 
     Shader sceneShader("../resources/shaders/scene.vert", "../resources/shaders/scene.frag");
     Shader hudShaderObj("../resources/shaders/hud.vert", "../resources/shaders/hud.frag");
@@ -657,7 +663,7 @@ int main() {
 
         // Render current mode
         if (isWalkingMode) {
-            renderWalkingMode(sceneShader, walkingModeIndicator, hudShaderObj.ID, VAO, digitTextures,
+            renderWalkingMode(sceneShader, humanModel, walkingModeIndicator, hudShaderObj.ID, VAO, digitTextures,
                               charPosX, charPosZ, charRot, totalDistanceWalked,
                               window, screenWidth, screenHeight, MAP_SPEED, TARGET_FPS, MAP_SIZE);
         } else {

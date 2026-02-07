@@ -1,106 +1,61 @@
 cmake_minimum_required(VERSION 3.16)
-project(Kostur)
+project(Kostur LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# --- GLAD library ---
-add_library(glad STATIC packages/glad/src/glad.c)
-target_include_directories(glad PUBLIC packages/glad/include)
+# -------------------------------------------------
+# Dependencies (provided by vcpkg)
+# vcpkg integrate install MUST be done beforehand
+# -------------------------------------------------
 
-# --- Main executable ---
-file(GLOB SRC_FILES src/*.cpp)
-add_executable(Kostur ${SRC_FILES}
-        Header/model.hpp
-        Header/mesh.hpp
-        Header/shader.hpp
-        Header/ground.hpp
+find_package(glfw3 CONFIG REQUIRED)
+find_package(glm CONFIG REQUIRED)
+find_package(assimp CONFIG REQUIRED)
+find_package(glad CONFIG REQUIRED)
+
+# -------------------------------------------------
+# Main executable
+# -------------------------------------------------
+
+add_executable(Kostur
+        src/main.cpp
         src/ground.cpp
-        src/ground.h)
 
-# --- Common includes ---
-target_include_directories(Kostur PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/Header
-        ${CMAKE_CURRENT_SOURCE_DIR}/packages/glad/include
+        Header/model.h
+        Header/mesh.h
+        Header/shader.h
+        Header/ground.h
+        src/Util.cpp
 )
 
-# --- Windows configuration ---
-if(WIN32)
-    message(STATUS "Configuring for Windows...")
+target_include_directories(Kostur PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/Header
+)
 
-    # Option 1: Use system-installed GLFW (if installed via vcpkg)
-    # find_package(glfw3 CONFIG REQUIRED)
+# -------------------------------------------------
+# Link libraries
+# -------------------------------------------------
 
-    # Option 2: Build GLFW from source (recommended for portability)
-    include(FetchContent)
-    FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw.git GIT_TAG 3.3.8) # Using 3.3.8 for stability
-    FetchContent_Declare(glm GIT_REPOSITORY https://github.com/g-truc/glm.git GIT_TAG 1.0.1)
-    FetchContent_Declare(assimp GIT_REPOSITORY https://github.com/assimp/assimp.git GIT_TAG v5.2.5)
-    
-    set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
-    set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
-    set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
+target_link_libraries(Kostur
+        PRIVATE
+        glad::glad
+        glfw
+        glm::glm
+        assimp::assimp
+        opengl32
+        gdi32
+)
 
-    FetchContent_MakeAvailable(glfw glm assimp)
-
-    # Link libraries
-    target_link_libraries(Kostur
-            glad
-            glfw
-            glm::glm
-            assimp::assimp
-            opengl32
-            gdi32
-    )
-
-    # --- Linux configuration ---
-elseif(UNIX AND NOT APPLE)
-    message(STATUS "Configuring for Linux...")
-
-    find_package(OpenGL REQUIRED)
-    find_package(glfw3 REQUIRED)
-
-    # Link libraries
-    target_link_libraries(Kostur
-            glad
-            glfw
-            ${OPENGL_LIBRARIES}
-    )
-
-    # Add pthread for Linux
-    find_package(Threads REQUIRED)
-    target_link_libraries(Kostur Threads::Threads)
-
-    # --- macOS configuration ---
-elseif(APPLE)
-    message(STATUS "Configuring for macOS...")
-
-    find_package(OpenGL REQUIRED)
-    find_package(glfw3 REQUIRED)
-
-    target_link_libraries(Kostur
-            glad
-            glfw
-            "-framework OpenGL"
-            "-framework Cocoa"
-            "-framework IOKit"
-            "-framework CoreVideo"
-    )
-endif()
-
-# --- Copy resources ---
-if(EXISTS ${CMAKE_SOURCE_DIR}/resources/shaders)
-    add_custom_command(TARGET Kostur POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_SOURCE_DIR}/resources/shaders
-            ${CMAKE_CURRENT_BINARY_DIR}/resources/shaders
-    )
-endif()
+# -------------------------------------------------
+# Copy resources after build
+# -------------------------------------------------
 
 if(EXISTS ${CMAKE_SOURCE_DIR}/resources)
-    add_custom_command(TARGET Kostur POST_BUILD
+    add_custom_command(
+            TARGET Kostur POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_SOURCE_DIR}/resources
-            ${CMAKE_CURRENT_BINARY_DIR}/resources
+            $<TARGET_FILE_DIR:Kostur>/resources
     )
 endif()

@@ -1,4 +1,4 @@
-#include "../Header/Util.h"
+#include "Util.h"
 
 #define _CRT_SECURE_NO_WARNINGS
 #include <fstream>
@@ -6,7 +6,7 @@
 #include <iostream>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "../Header/stb_image.h"
+#include "stb_image.h"
 
 // Autor: Nedeljko Tesanovic
 // Opis: pomocne funkcije za zaustavljanje programa, ucitavanje sejdera, tekstura i kursora
