@@ -57,6 +57,7 @@ struct MeasuringState {
 // ============================================================================
 TextureData loadTexture(const char *filePath) {
     TextureData data{};
+    stbi_set_flip_vertically_on_load(true);
     data.textureID = loadImageToTexture(filePath);
 
     int width, height, channels;
@@ -389,12 +390,15 @@ void renderWalkingMode(const Shader &sceneShader, Model &humanModel, const Textu
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) { moveX += 1.0f; moved = true; }
 
     if (moved) {
-        float angle = std::atan2(moveX, moveZ);
-        charRot = glm::degrees(angle);
+        float moveLen = std::sqrt(moveX * moveX + moveZ * moveZ);
+        if (moveLen > 0.0f) {
+            float angle = std::atan2(moveX, moveZ);
+            charRot = glm::degrees(angle);
 
-        glm::vec2 direction = glm::normalize(glm::vec2(moveX, moveZ));
-        charPosX += direction.x * (speed / targetFPS);
-        charPosZ += direction.y * (speed / targetFPS);
+            glm::vec2 direction = glm::normalize(glm::vec2(moveX, moveZ));
+            charPosX += direction.x * (speed / targetFPS);
+            charPosZ += direction.y * (speed / targetFPS);
+        }
     }
 
     // Constraints
@@ -410,10 +414,12 @@ void renderWalkingMode(const Shader &sceneShader, Model &humanModel, const Textu
 
     // Render character (Human Model)
     sceneShader.use();
+    sceneShader.setInt("nrPointLights", 0);
     auto modelMat = glm::mat4(1.0f);
-    modelMat = glm::translate(modelMat, glm::vec3(charPosX, 0.0f, charPosZ));
+    // Adjusted Y position to 1.0f so feet are on the ground (since model center is at 0 and height is approx 200cm)
+    modelMat = glm::translate(modelMat, glm::vec3(charPosX, 1.0f, charPosZ));
     modelMat = glm::rotate(modelMat, glm::radians(charRot), glm::vec3(0.0f, 1.0f, 0.0f));
-    modelMat = glm::scale(modelMat, glm::vec3(0.2f)); // Adjust scale as needed
+    modelMat = glm::scale(modelMat, glm::vec3(0.01f)); // Adjust scale as needed
     sceneShader.setMat4("model", modelMat);
     sceneShader.setBool("useColor", false);
     humanModel.Draw(const_cast<Shader&>(sceneShader));
@@ -453,18 +459,11 @@ void renderMeasuringMode(const Shader &sceneShader,
         renderCube();
         sceneShader.setBool("isEmissive", false);
 
-        // Point light for pin
-        std::string prefix = "pointLights[" + std::to_string(i) + "].";
-        sceneShader.setVec3(prefix + "position", p.x, 0.5f, p.z);
-        sceneShader.setVec3(prefix + "color", 1.0f, 0.0f, 0.0f);
-        sceneShader.setFloat(prefix + "intensity", 2.0f);
-
         if (i > 0) {
             const Point &prev = measuringState.points[i - 1];
             renderLine3D(sceneShader, prev.x, prev.z, p.x, p.z);
         }
     }
-    sceneShader.setInt("nrPointLights", static_cast<int>(measuringState.points.size()));
 
     // Render HUD
     renderModeIndicator(hudShader, hudVAO, modeIndicator, screenWidth, screenHeight);
@@ -593,6 +592,8 @@ int main() {
     int screenWidth, screenHeight;
     float charPosX = 0.0f;
     float charPosZ = 0.0f;
+    float camPosX = 0.0f;
+    float camPosZ = 5.0f;
     float charRot = 0.0f;
     bool isWalkingMode = true;
     float totalDistanceWalked = 0.0f;
@@ -635,13 +636,22 @@ int main() {
             lastSwitchTime = currentTime;
         }
 
+        // Camera movement with arrow keys
+        if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)    camPosZ -= MAP_SPEED / TARGET_FPS;
+        if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)  camPosZ += MAP_SPEED / TARGET_FPS;
+        if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)  camPosX -= MAP_SPEED / TARGET_FPS;
+        if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) camPosX += MAP_SPEED / TARGET_FPS;
+
+        // Camera constraints
+        float limit = MAP_SIZE / 2.0f;
+        camPosX = std::clamp(camPosX, -limit, limit);
+        camPosZ = std::clamp(camPosZ, -limit + 5.0f, limit + 5.0f);
+
         // Camera setup
         float camY = isWalkingMode ? 5.0f : 15.0f;
-        glm::vec3 camPos = glm::vec3(0.0f, camY, 10.0f);
-        if (isWalkingMode) {
-            camPos = glm::vec3(charPosX, camY, charPosZ + 5.0f);
-        }
-        glm::mat4 view = glm::lookAt(camPos, glm::vec3(camPos.x, 0.0f, camPos.z - 5.0f), glm::vec3(0, 1, 0));
+        glm::vec3 camPos = glm::vec3(camPosX, camY, camPosZ);
+        glm::vec3 lookAtTarget = glm::vec3(camPos.x, 0.0f, camPos.z - 5.0f);
+        glm::mat4 view = glm::lookAt(camPos, lookAtTarget, glm::vec3(0, 1, 0));
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)screenWidth / screenHeight, 0.1f, 100.0f);
 
         sceneShader.use();
@@ -653,6 +663,19 @@ int main() {
         sceneShader.setVec3("globalLightPos", 0.0f, 10.0f, 0.0f);
         sceneShader.setVec3("globalLightColor", 1.0f, 1.0f, 1.0f);
         sceneShader.setFloat("globalLightIntensity", 0.5f);
+
+        if (isWalkingMode) {
+            sceneShader.setInt("nrPointLights", 0);
+        } else {
+            sceneShader.setInt("nrPointLights", static_cast<int>(measuringState.points.size()));
+            for (size_t i = 0; i < measuringState.points.size(); ++i) {
+                const Point &p = measuringState.points[i];
+                std::string prefix = "pointLights[" + std::to_string(i) + "].";
+                sceneShader.setVec3(prefix + "position", p.x, 0.5f, p.z);
+                sceneShader.setVec3(prefix + "color", 1.0f, 0.0f, 0.0f);
+                sceneShader.setFloat(prefix + "intensity", 2.0f);
+            }
+        }
 
         // Render Ground
         auto modelMat = glm::mat4(1.0f);

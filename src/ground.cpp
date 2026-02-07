@@ -35,7 +35,7 @@ void Ground::generateGroundMesh(float width, float depth, int subdivisions) {
             vertex.Normal = glm::vec3(0, 1, 0);
 
             float tx = (float)j / subdivisions;
-            float ty = (float)i / subdivisions;
+            float ty = 1.0f - (float)i / subdivisions;
             vertex.TexCoords = glm::vec2(tx, ty);
 
             vertices.push_back(vertex);
