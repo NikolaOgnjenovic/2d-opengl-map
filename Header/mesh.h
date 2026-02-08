@@ -1,15 +1,9 @@
-
-
 #ifndef MESH_H
 #define MESH_H
 
-#include <glad/glad.h> // holds all OpenGL type declarations
-
+#include <glad/glad.h>
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
 #include "shader.h"
-
 #include <string>
 #include <vector>
 using namespace std;
@@ -32,14 +26,13 @@ struct Texture {
 class Mesh {
 public:
     // mesh Data
-    vector<Vertex>       vertices;
+    vector<Vertex> vertices;
     vector<unsigned int> indices;
-    vector<Texture>      textures;
+    vector<Texture> textures;
     unsigned int VAO;
 
     // constructor
-    Mesh(vector<Vertex> vertices, vector<unsigned int> indices, vector<Texture> textures)
-    {
+    Mesh(vector<Vertex> vertices, vector<unsigned int> indices, vector<Texture> textures) {
         this->vertices = vertices;
         this->indices = indices;
         this->textures = textures;
@@ -49,14 +42,12 @@ public:
     }
 
     // render the mesh
-    void Draw(Shader& shader)
-    {
+    void Draw(Shader &shader) {
         // bind appropriate textures
         unsigned int diffuseNr = 1;
         unsigned int specularNr = 1;
         unsigned int normalNr = 1;
-        for (unsigned int i = 0; i < textures.size(); i++)
-        {
+        for (unsigned int i = 0; i < textures.size(); i++) {
             glActiveTexture(GL_TEXTURE0 + i); // active proper texture unit before binding
             // retrieve texture number (the N in diffuse_textureN)
             string number;
@@ -86,8 +77,7 @@ private:
     unsigned int VBO, EBO;
 
     // initializes all the buffer objects/arrays
-    void setupMesh()
-    {
+    void setupMesh() {
         // create buffers/arrays
         glGenVertexArrays(1, &VAO);
         glGenBuffers(1, &VBO);
@@ -107,13 +97,13 @@ private:
         // set the vertex attribute pointers
         // vertex Positions
         glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) 0);
         // vertex normals
         glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Normal));
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, Normal));
         // vertex texture coords
         glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, TexCoords));
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, TexCoords));
     }
 };
 #endif

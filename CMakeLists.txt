@@ -14,28 +14,25 @@ find_package(glm CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
 find_package(glad CONFIG REQUIRED)
 
-# -------------------------------------------------
-# Main executable
-# -------------------------------------------------
-
 add_executable(Kostur
-        src/main.cpp
+        src/Main.cpp
         src/ground.cpp
+        src/Util.cpp
+        src/Util2D.cpp
+        src/Util3D.cpp
 
         Header/model.h
         Header/mesh.h
         Header/shader.h
         Header/ground.h
-        src/Util.cpp
+        Header/Util2D.h
+        Header/Util3D.h
+        src/Util2D.cpp
 )
 
 target_include_directories(Kostur PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/Header
 )
-
-# -------------------------------------------------
-# Link libraries
-# -------------------------------------------------
 
 target_link_libraries(Kostur
         PRIVATE
@@ -47,15 +44,11 @@ target_link_libraries(Kostur
         gdi32
 )
 
-# -------------------------------------------------
-# Copy resources after build
-# -------------------------------------------------
-
-if(EXISTS ${CMAKE_SOURCE_DIR}/resources)
+if (EXISTS ${CMAKE_SOURCE_DIR}/resources)
     add_custom_command(
             TARGET Kostur POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_SOURCE_DIR}/resources
             $<TARGET_FILE_DIR:Kostur>/resources
     )
-endif()
+endif ()

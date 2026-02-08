@@ -1,16 +1,13 @@
 #include "ground.h"
 
-// konstruktor
-Ground::Ground(float width, float depth, int subdivisions, unsigned int texID)
-    : Model("") // ignorisemo loadModel iz Model klase
-{
-    meshes.clear();           // obrisemo sve sto je Model eventualno napravio
-    addTexture(texID);        // dodajemo teksturu
-    generateGroundMesh(width, depth, subdivisions); // generisemo mesh
+Ground::Ground(const float width, const float depth, const int subdivisions, const unsigned int texID)
+    : Model("") {
+    meshes.clear();
+    addTexture(texID);
+    generateGroundMesh(width, depth, subdivisions);
 }
 
-// dodavanje teksture
-void Ground::addTexture(unsigned int texID) {
+void Ground::addTexture(const unsigned int texID) {
     Texture tex;
     tex.id = texID;
     tex.type = "uDiffMap";
@@ -18,15 +15,14 @@ void Ground::addTexture(unsigned int texID) {
     textures_loaded.push_back(tex);
 }
 
-// generisanje mesh-a za ground
-void Ground::generateGroundMesh(float width, float depth, int subdivisions) {
+void Ground::generateGroundMesh(const float width, const float depth, const int subdivisions) {
     std::vector<Vertex> vertices;
     std::vector<unsigned int> indices;
 
-    float dx = width / subdivisions;
-    float dz = depth / subdivisions;
-    float startX = -width / 2.0f;
-    float startZ = -depth / 2.0f;
+    const float dx = width / subdivisions;
+    const float dz = depth / subdivisions;
+    const float startX = -width / 2.0f;
+    const float startZ = -depth / 2.0f;
 
     for (int i = 0; i <= subdivisions; i++) {
         for (int j = 0; j <= subdivisions; j++) {
@@ -34,8 +30,8 @@ void Ground::generateGroundMesh(float width, float depth, int subdivisions) {
             vertex.Position = glm::vec3(startX + j * dx, 0.0f, startZ + i * dz);
             vertex.Normal = glm::vec3(0, 1, 0);
 
-            float tx = (float)j / subdivisions;
-            float ty = 1.0f - (float)i / subdivisions;
+            const float tx = static_cast<float>(j) / subdivisions;
+            const float ty = 1.0f - static_cast<float>(i) / subdivisions;
             vertex.TexCoords = glm::vec2(tx, ty);
 
             vertices.push_back(vertex);
@@ -44,8 +40,8 @@ void Ground::generateGroundMesh(float width, float depth, int subdivisions) {
 
     for (int i = 0; i < subdivisions; i++) {
         for (int j = 0; j < subdivisions; j++) {
-            int row1 = i * (subdivisions + 1);
-            int row2 = (i + 1) * (subdivisions + 1);
+            const int row1 = i * (subdivisions + 1);
+            const int row2 = (i + 1) * (subdivisions + 1);
 
             indices.push_back(row1 + j);
             indices.push_back(row2 + j);

@@ -6,325 +6,19 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-#include "Util.h"
+#include "util.h"
+#include "util2D.h"
+#include "util3D.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "stb_image.h"
 #include "shader.h"
 #include "model.h"
 #include "ground.h"
 
-// ============================================================================
-// GLOBALS & STRUCTS
-// ============================================================================
 GLFWcursor *cursor;
 
-struct TextureData {
-    unsigned int textureID;
-    int width;
-    int height;
-};
-
-struct Point {
-    float x, z;
-
-    bool operator==(const Point &other) const {
-        return std::abs(x - other.x) < 0.001f && std::abs(z - other.z) < 0.001f;
-    }
-};
-
-struct DigitTextures {
-    TextureData digits[10];
-    TextureData dot;
-};
-
-struct WalkingState {
-    float charPosX;
-    float charPosZ;
-    float charRotation;
-    float totalDistance;
-};
-
-struct MeasuringState {
-    std::vector<Point> points;
-    float totalMeasuredDistance = 0.0f;
-};
-
-// ============================================================================
-// TEXTURE LOADING
-// ============================================================================
-TextureData loadTexture(const char *filePath) {
-    TextureData data{};
-    stbi_set_flip_vertically_on_load(true);
-    data.textureID = loadImageToTexture(filePath);
-
-    int width, height, channels;
-    if (unsigned char *imageData = stbi_load(filePath, &width, &height, &channels, 0)) {
-        data.width = width;
-        data.height = height;
-        stbi_image_free(imageData);
-    } else {
-        data.width = 482;
-        data.height = 100;
-    }
-
-    return data;
-}
-
-DigitTextures loadDigitTextures() {
-    DigitTextures dt{};
-    for (int i = 0; i < 10; ++i) {
-        std::string path = "../resources/textures/digits/" + std::to_string(i) + ".png";
-        dt.digits[i] = loadTexture(path.c_str());
-    }
-    dt.dot = loadTexture("../resources/textures/digits/dot.png");
-    return dt;
-}
-
-// ============================================================================
-// RENDERING FUNCTIONS
-// ============================================================================
-void renderImage(const unsigned int shaderProgram, const unsigned int VAO, const unsigned int textureID,
-                 const float x, const float y, const float scaleX, const float scaleY) {
-    glUseProgram(shaderProgram);
-    glDisable(GL_DEPTH_TEST); // HUD elements shouldn't be depth tested
-
-    auto model = glm::mat4(1.0f);
-    model = glm::translate(model, glm::vec3(x, y, 0.0f));
-    model = glm::scale(model, glm::vec3(scaleX, scaleY, 1.0f));
-
-    const int modelLoc = glGetUniformLocation(shaderProgram, "model");
-    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, textureID);
-
-    glUniform1i(glGetUniformLocation(shaderProgram, "texture1"), 0);
-    glUniform1i(glGetUniformLocation(shaderProgram, "useCustomColor"), 0);
-
-    glBindVertexArray(VAO);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
-    glBindVertexArray(0);
-    glEnable(GL_DEPTH_TEST);
-}
-
-void renderImageBottomRight(const unsigned int shaderProgram,
-                            const unsigned int VAO,
-                            const TextureData &tex,
-                            const int screenWidth, const int screenHeight) {
-    const float quadWidthNDC = static_cast<float>(tex.width) / screenWidth;
-    const float quadHeightNDC = static_cast<float>(tex.height) / screenHeight;
-
-    const float scaleX = quadWidthNDC;
-    const float scaleY = quadHeightNDC;
-
-    const float posX = 1.0f - scaleX;
-    const float posY = -1.0f + scaleY;
-
-    renderImage(shaderProgram, VAO, tex.textureID, posX, posY, scaleX, scaleY);
-}
-
-void renderModeIndicator(const unsigned int shaderProgram,
-                         const unsigned int VAO,
-                         const TextureData &tex,
-                         const int screenWidth, const int screenHeight) {
-    const float quadWidthNDC = static_cast<float>(tex.width) / screenWidth;
-    const float quadHeightNDC = static_cast<float>(tex.height) / screenHeight;
-
-    const float scaleX = quadWidthNDC;
-    const float scaleY = quadHeightNDC;
-
-    const float posX = -1.0f + scaleX;
-    const float posY = 1.0f - scaleY;
-
-    renderImage(shaderProgram, VAO, tex.textureID, posX, posY, scaleX, scaleY);
-}
-
-void renderNumber(const unsigned int shaderProgram, const unsigned int VAO,
-                  const DigitTextures &dt, const float number, const float x, const float y, const float scale) {
-    const std::string s = std::to_string(number);
-    float offsetX = 0.0f;
-
-    for (const char c: s) {
-        if (c >= '0' && c <= '9') {
-            const int digit = c - '0';
-            renderImage(shaderProgram, VAO, dt.digits[digit].textureID, x + offsetX, y, scale, scale);
-            offsetX += scale * 0.6f;
-        } else if (c == '.') {
-            renderImage(shaderProgram, VAO, dt.dot.textureID, x + offsetX, y, scale, scale);
-            offsetX += scale * 0.6f;
-        }
-    }
-}
-
-// Simple Primitive Generator
-unsigned int cubeVAO = 0, cubeVBO = 0;
-void renderCube() {
-    if (cubeVAO == 0) {
-        float vertices[] = {
-            // back face
-            -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 0.0f, 0.0f, // bottom-left
-             0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 1.0f, 1.0f, // top-right
-             0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 1.0f, 0.0f, // bottom-right         
-             0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 1.0f, 1.0f, // top-right
-            -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 0.0f, 0.0f, // bottom-left
-            -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 0.0f, 1.0f, // top-left
-            // front face
-            -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 0.0f, 0.0f, // bottom-left
-             0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 1.0f, 0.0f, // bottom-right
-             0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 1.0f, 1.0f, // top-right
-             0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 1.0f, 1.0f, // top-right
-            -0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 0.0f, 1.0f, // top-left
-            -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 0.0f, 0.0f, // bottom-left
-            // left face
-            -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-right
-            -0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f, 1.0f, 1.0f, // top-left
-            -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-left
-            -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-left
-            -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f, 0.0f, 0.0f, // bottom-right
-            -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-right
-            // right face
-             0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-left
-             0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-right
-             0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f, 1.0f, 1.0f, // top-right         
-             0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-right
-             0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-left
-             0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f, 0.0f, 0.0f, // bottom-left     
-            // bottom face
-            -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f, 0.0f, 1.0f, // top-right
-             0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f, 1.0f, 1.0f, // top-left
-             0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f, 1.0f, 0.0f, // bottom-left
-             0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f, 1.0f, 0.0f, // bottom-left
-            -0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f, 0.0f, 0.0f, // bottom-right
-            -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f, 0.0f, 1.0f, // top-right
-            // top face
-            -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f, 0.0f, 1.0f, // top-left
-             0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f, 1.0f, 0.0f, // bottom-right
-             0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f, 1.0f, 1.0f, // top-right     
-             0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f, 1.0f, 0.0f, // bottom-right
-            -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f, 0.0f, 1.0f, // top-left
-            -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f, 0.0f, 0.0f  // bottom-left        
-        };
-        glGenVertexArrays(1, &cubeVAO);
-        glGenBuffers(1, &cubeVBO);
-        glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-        glBindVertexArray(cubeVAO);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
-    }
-    glBindVertexArray(cubeVAO);
-    glDrawArrays(GL_TRIANGLES, 0, 36);
-    glBindVertexArray(0);
-}
-
-unsigned int circleVAO = 0, circleVBO = 0;
-constexpr int circleSegments = 32;
-void renderCircle() {
-    if (circleVAO == 0) {
-        std::vector<float> vertices;
-        // Center point
-        vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); // Pos
-        vertices.push_back(0.0f); vertices.push_back(1.0f); vertices.push_back(0.0f); // Normal
-        vertices.push_back(0.5f); vertices.push_back(0.5f); // Tex
-
-        for (int i = 0; i <= circleSegments; i++) {
-            float angle = 2.0f * 3.1415926535f * float(i) / float(circleSegments);
-            float x = std::cos(angle);
-            float z = std::sin(angle);
-            vertices.push_back(x); vertices.push_back(0.0f); vertices.push_back(z); // Pos
-            vertices.push_back(0.0f); vertices.push_back(1.0f); vertices.push_back(0.0f); // Normal
-            vertices.push_back((x + 1.0f) * 0.5f); vertices.push_back((z + 1.0f) * 0.5f); // Tex
-        }
-
-        glGenVertexArrays(1, &circleVAO);
-        glGenBuffers(1, &circleVBO);
-        glBindBuffer(GL_ARRAY_BUFFER, circleVBO);
-        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
-        glBindVertexArray(circleVAO);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
-    }
-    glBindVertexArray(circleVAO);
-    glDrawArrays(GL_TRIANGLE_FAN, 0, circleSegments + 2);
-    glBindVertexArray(0);
-}
-
-unsigned int cylinderVAO = 0, cylinderVBO = 0;
-void renderCylinder() {
-    if (cylinderVAO == 0) {
-        std::vector<float> vertices;
-        for (int i = 0; i <= circleSegments; i++) {
-            float angle = 2.0f * 3.1415926535f * float(i) / float(circleSegments);
-            float x = std::cos(angle);
-            float z = std::sin(angle);
-
-            // Top circle
-            vertices.push_back(x); vertices.push_back(0.5f); vertices.push_back(z);
-            vertices.push_back(x); vertices.push_back(0.0f); vertices.push_back(z);
-            vertices.push_back(float(i) / circleSegments); vertices.push_back(1.0f);
-
-            // Bottom circle
-            vertices.push_back(x); vertices.push_back(-0.5f); vertices.push_back(z);
-            vertices.push_back(x); vertices.push_back(0.0f); vertices.push_back(z);
-            vertices.push_back(float(i) / circleSegments); vertices.push_back(0.0f);
-        }
-
-        glGenVertexArrays(1, &cylinderVAO);
-        glGenBuffers(1, &cylinderVBO);
-        glBindBuffer(GL_ARRAY_BUFFER, cylinderVBO);
-        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
-        glBindVertexArray(cylinderVAO);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
-    }
-    glBindVertexArray(cylinderVAO);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, (circleSegments + 1) * 2);
-    glBindVertexArray(0);
-}
-
-void renderLine3D(const Shader &shader, float x1, float z1, float x2, float z2, float thickness = 0.05f) {
-    shader.use();
-    float dx = x2 - x1;
-    float dz = z2 - z1;
-    float length = std::sqrt(dx * dx + dz * dz);
-    float angle = std::atan2(dz, dx);
-    float midX = (x1 + x2) / 2.0f;
-    float midZ = (z1 + z2) / 2.0f;
-    auto model = glm::mat4(1.0f);
-    model = glm::translate(model, glm::vec3(midX, 0.01f, midZ));
-    model = glm::rotate(model, -angle, glm::vec3(0.0f, 1.0f, 0.0f));
-    model = glm::scale(model, glm::vec3(length, 0.02f, thickness));
-    shader.setMat4("model", model);
-    shader.setVec3("color", 1.0f, 1.0f, 1.0f);
-    shader.setBool("useColor", true);
-    shader.setBool("isEmissive", true);
-    renderCube();
-}
-
-// ============================================================================
-// INPUT & INTERACTION
-// ============================================================================
 bool isMouseOverIndicator(const double mouseX, const double mouseY, const int screenWidth, const int screenHeight,
                           const TextureData &tex) {
     const float ndcX = static_cast<float>(mouseX) / screenWidth * 2.0f - 1.0f;
@@ -346,9 +40,6 @@ void keyCallback(GLFWwindow *window, const int key, int scancode, const int acti
     }
 }
 
-// ============================================================================
-// MEASURING MODE HELPER FUNCTIONS
-// ============================================================================
 void handleMeasuringModeClick(MeasuringState &measuringState, double mouseX, double mouseY,
                               int screenWidth, int screenHeight, float mapSize, glm::mat4 view, glm::mat4 projection) {
     // Raycasting to find position on the map (y=0 plane)
@@ -361,12 +52,12 @@ void handleMeasuringModeClick(MeasuringState &measuringState, double mouseX, dou
     ray_wor = glm::normalize(ray_wor);
 
     glm::vec3 camPos = glm::vec3(glm::inverse(view)[3]);
-    
+
     // Intersection with y=0 plane: camPos.y + t * ray_wor.y = 0  => t = -camPos.y / ray_wor.y
     if (std::abs(ray_wor.y) < 0.0001f) return;
     float t = -camPos.y / ray_wor.y;
     if (t < 0) return;
-    
+
     glm::vec3 worldPos = camPos + t * ray_wor;
 
     // Check if within map bounds
@@ -380,7 +71,8 @@ void handleMeasuringModeClick(MeasuringState &measuringState, double mouseX, dou
         const Point &p = measuringState.points[i];
         float dist = std::sqrt((p.x - worldPos.x) * (p.x - worldPos.x) + (p.z - worldPos.z) * (p.z - worldPos.z));
 
-        if (dist < 0.5f) { // Threshold in world units
+        if (dist < 0.5f) {
+            // Threshold in world units
             clickedOnExistingPoint = true;
             clickedIndex = i;
             break;
@@ -403,9 +95,6 @@ void handleMeasuringModeClick(MeasuringState &measuringState, double mouseX, dou
     }
 }
 
-// ============================================================================
-// MODE SWITCHING
-// ============================================================================
 bool shouldSwitchMode(GLFWwindow *window, bool isWalkingMode, double currentTime,
                       double &lastSwitchTime, int screenWidth, int screenHeight,
                       const TextureData &walkingIndicator, const TextureData &measuringIndicator) {
@@ -445,15 +134,12 @@ void performModeSwitch(bool &isWalkingMode, WalkingState &walkingState, Measurin
     isWalkingMode = !isWalkingMode;
 }
 
-// ============================================================================
-// RENDER MODES
-// ============================================================================
-void renderWalkingMode(const Shader &sceneShader, Model &humanModel, const TextureData &modeIndicator, const unsigned int hudShader, const unsigned int hudVAO, 
+void renderWalkingMode(const Shader &sceneShader, Model &humanModel, const TextureData &modeIndicator,
+                       const unsigned int hudShader, const unsigned int hudVAO,
                        const DigitTextures &digitTextures,
                        float &charPosX, float &charPosZ, float &charRot, float &totalDistanceWalked,
                        GLFWwindow *window, int screenWidth, int screenHeight,
                        float speed, double targetFPS, float mapSize) {
-    
     float oldX = charPosX;
     float oldZ = charPosZ;
     bool moved = false;
@@ -461,10 +147,22 @@ void renderWalkingMode(const Shader &sceneShader, Model &humanModel, const Textu
     float moveX = 0.0f;
     float moveZ = 0.0f;
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) { moveZ -= 1.0f; moved = true; }
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) { moveZ += 1.0f; moved = true; }
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) { moveX -= 1.0f; moved = true; }
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) { moveX += 1.0f; moved = true; }
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+        moveZ -= 1.0f;
+        moved = true;
+    }
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+        moveZ += 1.0f;
+        moved = true;
+    }
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+        moveX -= 1.0f;
+        moved = true;
+    }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+        moveX += 1.0f;
+        moved = true;
+    }
 
     if (moved) {
         float moveLen = std::sqrt(moveX * moveX + moveZ * moveZ);
@@ -499,7 +197,7 @@ void renderWalkingMode(const Shader &sceneShader, Model &humanModel, const Textu
     modelMat = glm::scale(modelMat, glm::vec3(0.01f)); // Adjust scale as needed
     sceneShader.setMat4("model", modelMat);
     sceneShader.setBool("useColor", false);
-    humanModel.Draw(const_cast<Shader&>(sceneShader));
+    humanModel.Draw(const_cast<Shader &>(sceneShader));
 
     // Render HUD
     renderModeIndicator(hudShader, hudVAO, modeIndicator, screenWidth, screenHeight);
@@ -511,12 +209,11 @@ void renderMeasuringMode(const Shader &sceneShader,
                          const DigitTextures &digitTextures, MeasuringState &measuringState,
                          GLFWwindow *window, int screenWidth, int screenHeight,
                          float mapSize, glm::mat4 view, glm::mat4 projection, bool &leftMousePressed) {
-    
     // Render pins and lines
     sceneShader.use();
     for (size_t i = 0; i < measuringState.points.size(); ++i) {
         const Point &p = measuringState.points[i];
-        
+
         // Needle
         auto modelMat = glm::mat4(1.0f);
         modelMat = glm::translate(modelMat, glm::vec3(p.x, 0.25f, p.z));
@@ -563,9 +260,6 @@ void renderMeasuringMode(const Shader &sceneShader,
     }
 }
 
-// ============================================================================
-// BUFFER SETUP
-// ============================================================================
 void setupBuffers(unsigned int &VAO, unsigned int &VBO, unsigned int &EBO) {
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -596,9 +290,6 @@ void setupBuffers(unsigned int &VAO, unsigned int &VBO, unsigned int &EBO) {
     glBindVertexArray(0);
 }
 
-// ============================================================================
-// CLEANUP
-// ============================================================================
 void cleanupResources(unsigned int VAO, unsigned int VBO, unsigned int EBO, unsigned int shaderProgram,
                       const TextureData &cornerImage, const TextureData &bgImage, const TextureData &pinImage,
                       const TextureData &walkingIndicator, const TextureData &measuringIndicator) {
@@ -612,25 +303,11 @@ void cleanupResources(unsigned int VAO, unsigned int VBO, unsigned int EBO, unsi
     glDeleteTextures(1, &walkingIndicator.textureID);
     glDeleteTextures(1, &measuringIndicator.textureID);
 
-    if (circleVAO != 0) {
-        glDeleteVertexArrays(1, &circleVAO);
-        glDeleteBuffers(1, &circleVBO);
-    }
-    if (cylinderVAO != 0) {
-        glDeleteVertexArrays(1, &cylinderVAO);
-        glDeleteBuffers(1, &cylinderVBO);
-    }
-    if (cubeVAO != 0) {
-        glDeleteVertexArrays(1, &cubeVAO);
-        glDeleteBuffers(1, &cubeVBO);
-    }
+    cleanupPrimitives();
 
     glfwDestroyCursor(cursor);
 }
 
-// ============================================================================
-// MAIN FUNCTION
-// ============================================================================
 int main() {
     // Initialize GLFW and create window
     glfwInit();
@@ -728,9 +405,9 @@ int main() {
         }
 
         // Camera movement with arrow keys
-        if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)    camPosZ -= MAP_SPEED / TARGET_FPS;
-        if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)  camPosZ += MAP_SPEED / TARGET_FPS;
-        if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)  camPosX -= MAP_SPEED / TARGET_FPS;
+        if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) camPosZ -= MAP_SPEED / TARGET_FPS;
+        if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) camPosZ += MAP_SPEED / TARGET_FPS;
+        if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) camPosX -= MAP_SPEED / TARGET_FPS;
         if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) camPosX += MAP_SPEED / TARGET_FPS;
 
         // Camera constraints
@@ -743,13 +420,13 @@ int main() {
         glm::vec3 camPos = glm::vec3(camPosX, camY, camPosZ);
         glm::vec3 lookAtTarget = glm::vec3(camPos.x, 0.0f, camPos.z - 5.0f);
         glm::mat4 view = glm::lookAt(camPos, lookAtTarget, glm::vec3(0, 1, 0));
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)screenWidth / screenHeight, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float) screenWidth / screenHeight, 0.1f, 100.0f);
 
         sceneShader.use();
         sceneShader.setMat4("view", view);
         sceneShader.setMat4("projection", projection);
         sceneShader.setVec3("viewPos", camPos);
-        
+
         // Global light
         sceneShader.setVec3("globalLightPos", 0.0f, 10.0f, 0.0f);
         sceneShader.setVec3("globalLightColor", 1.0f, 1.0f, 1.0f);
@@ -800,7 +477,7 @@ int main() {
         }
     }
 
-    // Cleanup
+
     cleanupResources(VAO, VBO, EBO, shaderProgram, cornerImage, bgImage, pinImage,
                      walkingModeIndicator, measuringModeIndicator);
 

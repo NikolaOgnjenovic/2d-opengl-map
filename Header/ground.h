@@ -7,5 +7,6 @@ public:
 
 private:
     void addTexture(unsigned int texID);
+
     void generateGroundMesh(float width, float depth, int subdivisions);
 };

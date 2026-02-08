@@ -1,4 +1,4 @@
-#include "Util.h"
+#include "util.h"
 
 #define _CRT_SECURE_NO_WARNINGS
 #include <fstream>
@@ -18,25 +18,22 @@ int endProgram(std::string message) {
     return -1;
 }
 
-unsigned int compileShader(GLenum type, const char* source)
-{
+unsigned int compileShader(GLenum type, const char *source) {
     //Uzima kod u fajlu na putanji "source", kompajlira ga i vraca sejder tipa "type"
     //Citanje izvornog koda iz fajla
     std::string content = "";
     std::ifstream file(source);
     std::stringstream ss;
-    if (file.is_open())
-    {
+    if (file.is_open()) {
         ss << file.rdbuf();
         file.close();
         std::cout << "Uspjesno procitao fajl sa putanje \"" << source << "\"!" << std::endl;
-    }
-    else {
+    } else {
         ss << "";
         std::cout << "Greska pri citanju fajla sa putanje \"" << source << "\"!" << std::endl;
     }
     std::string temp = ss.str();
-    const char* sourceCode = temp.c_str(); //Izvorni kod sejdera koji citamo iz fajla na putanji "source"
+    const char *sourceCode = temp.c_str(); //Izvorni kod sejdera koji citamo iz fajla na putanji "source"
 
     int shader = glCreateShader(type); //Napravimo prazan sejder odredjenog tipa (vertex ili fragment)
 
@@ -46,21 +43,19 @@ unsigned int compileShader(GLenum type, const char* source)
     glCompileShader(shader); //Kompajliraj sejder
 
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success); //Provjeri da li je sejder uspjesno kompajliran
-    if (success == GL_FALSE)
-    {
+    if (success == GL_FALSE) {
         glGetShaderInfoLog(shader, 512, NULL, infoLog); //Pribavi poruku o gresci
         if (type == GL_VERTEX_SHADER)
             printf("VERTEX");
         else if (type == GL_FRAGMENT_SHADER)
             printf("FRAGMENT");
         printf(" sejder ima gresku! Greska: \n");
-        printf("%s\n", infoLog);  // Fixed: Use format specifier
+        printf("%s\n", infoLog); // Fixed: Use format specifier
     }
     return shader;
 }
 
-unsigned int createShader(const char* vsSource, const char* fsSource)
-{
+unsigned int createShader(const char *vsSource, const char *fsSource) {
     //Pravi objedinjeni sejder program koji se sastoji od Vertex sejdera ciji je kod na putanji vsSource
 
     unsigned int program; //Objedinjeni sejder
@@ -82,9 +77,9 @@ unsigned int createShader(const char* vsSource, const char* fsSource)
     int success;
     char infoLog[512];
     glGetProgramiv(program, GL_VALIDATE_STATUS, &success); //Slicno kao za sejdere
-    if (success == GL_FALSE)
-    {
-        glGetProgramInfoLog(program, 512, NULL, infoLog);  // Fixed: Use glGetProgramInfoLog instead of glGetShaderInfoLog
+    if (success == GL_FALSE) {
+        glGetProgramInfoLog(program, 512, NULL, infoLog);
+        // Fixed: Use glGetProgramInfoLog instead of glGetShaderInfoLog
         std::cout << "Objedinjeni sejder ima gresku! Greska: \n";
         std::cout << infoLog << std::endl;
     }
@@ -98,13 +93,12 @@ unsigned int createShader(const char* vsSource, const char* fsSource)
     return program;
 }
 
-unsigned int loadImageToTexture(const char* filePath) {
+unsigned int loadImageToTexture(const char *filePath) {
     int TextureWidth;
     int TextureHeight;
     int TextureChannels;
-    unsigned char* ImageData = stbi_load(filePath, &TextureWidth, &TextureHeight, &TextureChannels, 0);
-    if (ImageData != NULL)
-    {
+    unsigned char *ImageData = stbi_load(filePath, &TextureWidth, &TextureHeight, &TextureChannels, 0);
+    if (ImageData != NULL) {
         // Slike se osnovno ucitavaju naopako pa se moraju ispraviti da budu uspravne
         stbi_set_flip_vertically_on_load(true);
 
@@ -138,24 +132,21 @@ unsigned int loadImageToTexture(const char* filePath) {
         // oslobadjanje memorije zauzete sa stbi_load posto vise nije potrebna
         stbi_image_free(ImageData);
         return Texture;
-    }
-    else
-    {
+    } else {
         std::cout << "Textura nije ucitana! Putanja texture: " << filePath << std::endl;
         stbi_image_free(ImageData);
         return 0;
     }
 }
 
-GLFWcursor* loadImageToCursor(const char* filePath) {
+GLFWcursor *loadImageToCursor(const char *filePath) {
     int TextureWidth;
     int TextureHeight;
     int TextureChannels;
 
-    unsigned char* ImageData = stbi_load(filePath, &TextureWidth, &TextureHeight, &TextureChannels, 0);
+    unsigned char *ImageData = stbi_load(filePath, &TextureWidth, &TextureHeight, &TextureChannels, 0);
 
-    if (ImageData != NULL)
-    {
+    if (ImageData != NULL) {
         GLFWimage image;
         image.width = TextureWidth;
         image.height = TextureHeight;
@@ -166,18 +157,17 @@ GLFWcursor* loadImageToCursor(const char* filePath) {
         int hotspotX = TextureWidth / 5;
         int hotspotY = TextureHeight / 5;
 
-        GLFWcursor* cursor = glfwCreateCursor(&image, hotspotX, hotspotY);
+        GLFWcursor *cursor = glfwCreateCursor(&image, hotspotX, hotspotY);
         stbi_image_free(ImageData);
         return cursor;
-    }
-    else {
+    } else {
         std::cout << "Kursor nije ucitan! Putanja kursora: " << filePath << std::endl;
         stbi_image_free(ImageData);
-        return nullptr;  // Return nullptr on failure
+        return nullptr; // Return nullptr on failure
     }
 }
 
-void preprocessTexture(unsigned& texture, const char* filepath) {
+void preprocessTexture(unsigned &texture, const char *filepath) {
     texture = loadImageToTexture(filepath);
     glBindTexture(GL_TEXTURE_2D, texture);
 
