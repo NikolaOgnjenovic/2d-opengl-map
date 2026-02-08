@@ -45,6 +45,11 @@ void main()
     
     vec3 result = vec3(0.0);
     
+    // Ambient light
+    float ambientStrength = 0.2;
+    vec3 ambient = ambientStrength * globalLightColor;
+    result += ambient;
+    
     // Globalno svetlo
     vec3 lightDir = normalize(globalLightPos - FragPos);
     float diff = max(dot(norm, lightDir), 0.0);

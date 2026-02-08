@@ -226,6 +226,83 @@ void renderCube() {
     glBindVertexArray(0);
 }
 
+unsigned int circleVAO = 0, circleVBO = 0;
+constexpr int circleSegments = 32;
+void renderCircle() {
+    if (circleVAO == 0) {
+        std::vector<float> vertices;
+        // Center point
+        vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); // Pos
+        vertices.push_back(0.0f); vertices.push_back(1.0f); vertices.push_back(0.0f); // Normal
+        vertices.push_back(0.5f); vertices.push_back(0.5f); // Tex
+
+        for (int i = 0; i <= circleSegments; i++) {
+            float angle = 2.0f * 3.1415926535f * float(i) / float(circleSegments);
+            float x = std::cos(angle);
+            float z = std::sin(angle);
+            vertices.push_back(x); vertices.push_back(0.0f); vertices.push_back(z); // Pos
+            vertices.push_back(0.0f); vertices.push_back(1.0f); vertices.push_back(0.0f); // Normal
+            vertices.push_back((x + 1.0f) * 0.5f); vertices.push_back((z + 1.0f) * 0.5f); // Tex
+        }
+
+        glGenVertexArrays(1, &circleVAO);
+        glGenBuffers(1, &circleVBO);
+        glBindBuffer(GL_ARRAY_BUFFER, circleVBO);
+        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+        glBindVertexArray(circleVAO);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+    }
+    glBindVertexArray(circleVAO);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, circleSegments + 2);
+    glBindVertexArray(0);
+}
+
+unsigned int cylinderVAO = 0, cylinderVBO = 0;
+void renderCylinder() {
+    if (cylinderVAO == 0) {
+        std::vector<float> vertices;
+        for (int i = 0; i <= circleSegments; i++) {
+            float angle = 2.0f * 3.1415926535f * float(i) / float(circleSegments);
+            float x = std::cos(angle);
+            float z = std::sin(angle);
+
+            // Top circle
+            vertices.push_back(x); vertices.push_back(0.5f); vertices.push_back(z);
+            vertices.push_back(x); vertices.push_back(0.0f); vertices.push_back(z);
+            vertices.push_back(float(i) / circleSegments); vertices.push_back(1.0f);
+
+            // Bottom circle
+            vertices.push_back(x); vertices.push_back(-0.5f); vertices.push_back(z);
+            vertices.push_back(x); vertices.push_back(0.0f); vertices.push_back(z);
+            vertices.push_back(float(i) / circleSegments); vertices.push_back(0.0f);
+        }
+
+        glGenVertexArrays(1, &cylinderVAO);
+        glGenBuffers(1, &cylinderVBO);
+        glBindBuffer(GL_ARRAY_BUFFER, cylinderVBO);
+        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+        glBindVertexArray(cylinderVAO);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+    }
+    glBindVertexArray(cylinderVAO);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, (circleSegments + 1) * 2);
+    glBindVertexArray(0);
+}
+
 void renderLine3D(const Shader &shader, float x1, float z1, float x2, float z2, float thickness = 0.05f) {
     shader.use();
     float dx = x2 - x1;
@@ -447,16 +524,16 @@ void renderMeasuringMode(const Shader &sceneShader,
         sceneShader.setMat4("model", modelMat);
         sceneShader.setVec3("color", 0.5f, 0.5f, 0.5f);
         sceneShader.setBool("useColor", true);
-        renderCube();
+        renderCylinder();
 
-        // Ball
+        // Ball (now glowing circle)
         modelMat = glm::mat4(1.0f);
-        modelMat = glm::translate(modelMat, glm::vec3(p.x, 0.5f, p.z));
-        modelMat = glm::scale(modelMat, glm::vec3(0.2f));
+        modelMat = glm::translate(modelMat, glm::vec3(p.x, 0.52f, p.z));
+        modelMat = glm::scale(modelMat, glm::vec3(0.15f)); // Smaller circle and moved up
         sceneShader.setMat4("model", modelMat);
         sceneShader.setVec3("color", 1.0f, 0.0f, 0.0f);
         sceneShader.setBool("isEmissive", true);
-        renderCube();
+        renderCircle();
         sceneShader.setBool("isEmissive", false);
 
         if (i > 0) {
@@ -534,6 +611,19 @@ void cleanupResources(unsigned int VAO, unsigned int VBO, unsigned int EBO, unsi
     glDeleteTextures(1, &pinImage.textureID);
     glDeleteTextures(1, &walkingIndicator.textureID);
     glDeleteTextures(1, &measuringIndicator.textureID);
+
+    if (circleVAO != 0) {
+        glDeleteVertexArrays(1, &circleVAO);
+        glDeleteBuffers(1, &circleVBO);
+    }
+    if (cylinderVAO != 0) {
+        glDeleteVertexArrays(1, &cylinderVAO);
+        glDeleteBuffers(1, &cylinderVBO);
+    }
+    if (cubeVAO != 0) {
+        glDeleteVertexArrays(1, &cubeVAO);
+        glDeleteBuffers(1, &cubeVBO);
+    }
 
     glfwDestroyCursor(cursor);
 }
@@ -619,6 +709,7 @@ int main() {
     double lastSwitchTime = 0.0;
 
     glEnable(GL_DEPTH_TEST);
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
@@ -662,7 +753,7 @@ int main() {
         // Global light
         sceneShader.setVec3("globalLightPos", 0.0f, 10.0f, 0.0f);
         sceneShader.setVec3("globalLightColor", 1.0f, 1.0f, 1.0f);
-        sceneShader.setFloat("globalLightIntensity", 0.5f);
+        sceneShader.setFloat("globalLightIntensity", 1.0f);
 
         if (isWalkingMode) {
             sceneShader.setInt("nrPointLights", 0);
