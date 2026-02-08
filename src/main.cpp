@@ -191,10 +191,9 @@ void renderWalkingMode(const Shader &sceneShader, Model &humanModel, const Textu
     sceneShader.use();
     sceneShader.setInt("nrPointLights", 0);
     auto modelMat = glm::mat4(1.0f);
-    // Adjusted Y position to 0.0f as model seems to be centered at Y~0.5 and map is at Y=0
-    modelMat = glm::translate(modelMat, glm::vec3(charPosX, 0.0f, charPosZ));
+    modelMat = glm::translate(modelMat, glm::vec3(charPosX, 0.5f, charPosZ));
     modelMat = glm::rotate(modelMat, glm::radians(charRot), glm::vec3(0.0f, 1.0f, 0.0f));
-    modelMat = glm::scale(modelMat, glm::vec3(1.0f)); // Adjust scale as needed
+    modelMat = glm::scale(modelMat, glm::vec3(0.5f));
     sceneShader.setMat4("model", modelMat);
     sceneShader.setBool("useColor", false);
     humanModel.Draw(const_cast<Shader &>(sceneShader));
