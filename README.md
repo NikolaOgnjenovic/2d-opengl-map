@@ -11,7 +11,7 @@ bootstrap-vcpkg.bat
 ### 2. Install dependencies
 
 ```bat
-vcpkg install glfw3 glm assimp
+vcpkg install glfw3 glm assimp glew:x64-windows
 ```
 
 (Optional but recommended)

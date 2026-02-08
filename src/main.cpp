@@ -3,7 +3,7 @@
 #include <thread>
 #include <vector>
 #include <algorithm>
-#include <glad/glad.h>
+#include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
 #include "util.h"
@@ -333,8 +333,9 @@ int main() {
     cursor = loadImageToCursor("../resources/cursors/compass.png");
     glfwSetCursor(window, cursor);
 
-    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) {
-        return endProgram("GLAD nije uspeo da se inicijalizuje.");
+    glewExperimental = GL_TRUE;
+    if (glewInit() != GLEW_OK) {
+        return endProgram("GLEW nije uspeo da se inicijalizuje.");
     }
 
     glEnable(GL_BLEND);

@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
-find_package(glad CONFIG REQUIRED)
+find_package(GLEW CONFIG REQUIRED)
 
 add_executable(Kostur
         src/Main.cpp
@@ -36,7 +36,7 @@ target_include_directories(Kostur PRIVATE
 
 target_link_libraries(Kostur
         PRIVATE
-        glad::glad
+        GLEW::GLEW
         glfw
         glm::glm
         assimp::assimp
