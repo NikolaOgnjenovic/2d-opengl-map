@@ -181,7 +181,6 @@ inline unsigned int TextureFromFile(const char *path, const string &directory, b
     glGenTextures(1, &textureID);
 
     int width, height, nrComponents;
-    stbi_set_flip_vertically_on_load(true);
     unsigned char *data = stbi_load(filename.c_str(), &width, &height, &nrComponents, 0);
     if (data) {
         GLenum format = GL_RGB;
@@ -193,7 +192,6 @@ inline unsigned int TextureFromFile(const char *path, const string &directory, b
             format = GL_RGBA;
 
         glBindTexture(GL_TEXTURE_2D, textureID);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
         glGenerateMipmap(GL_TEXTURE_2D);
 

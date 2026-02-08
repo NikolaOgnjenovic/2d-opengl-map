@@ -167,10 +167,10 @@ void renderWalkingMode(const Shader &sceneShader, Model &humanModel, const Textu
     if (moved) {
         float moveLen = std::sqrt(moveX * moveX + moveZ * moveZ);
         if (moveLen > 0.0f) {
-            float angle = std::atan2(moveX, moveZ);
+            const float angle = std::atan2(moveX, moveZ);
             charRot = glm::degrees(angle);
 
-            glm::vec2 direction = glm::normalize(glm::vec2(moveX, moveZ));
+            const glm::vec2 direction = glm::normalize(glm::vec2(moveX, moveZ));
             charPosX += direction.x * (speed / targetFPS);
             charPosZ += direction.y * (speed / targetFPS);
         }
@@ -187,14 +187,14 @@ void renderWalkingMode(const Shader &sceneShader, Model &humanModel, const Textu
         totalDistanceWalked += std::sqrt(dx * dx + dz * dz);
     }
 
-    // Render character (Human Model)
+    // Render character (human Model)
     sceneShader.use();
     sceneShader.setInt("nrPointLights", 0);
     auto modelMat = glm::mat4(1.0f);
-    // Adjusted Y position to 1.0f so feet are on the ground (since model center is at 0 and height is approx 200cm)
-    modelMat = glm::translate(modelMat, glm::vec3(charPosX, 1.0f, charPosZ));
+    // Adjusted Y position to 0.0f as model seems to be centered at Y~0.5 and map is at Y=0
+    modelMat = glm::translate(modelMat, glm::vec3(charPosX, 0.0f, charPosZ));
     modelMat = glm::rotate(modelMat, glm::radians(charRot), glm::vec3(0.0f, 1.0f, 0.0f));
-    modelMat = glm::scale(modelMat, glm::vec3(0.01f)); // Adjust scale as needed
+    modelMat = glm::scale(modelMat, glm::vec3(1.0f)); // Adjust scale as needed
     sceneShader.setMat4("model", modelMat);
     sceneShader.setBool("useColor", false);
     humanModel.Draw(const_cast<Shader &>(sceneShader));
@@ -371,12 +371,11 @@ int main() {
     // Timing constants
     constexpr double TARGET_FPS = 75.0;
     constexpr double FRAME_TIME = 1.0 / TARGET_FPS;
-    constexpr float MAP_SPEED = 5.0f;
     constexpr float MAP_SIZE = 20.0f;
 
     // Load 3D Models
     Ground mapGround(MAP_SIZE, MAP_SIZE, 1, bgImage.textureID);
-    Model humanModel("../resources/models/human.OBJ");
+    Model humanModel("../resources/models/Hercules.obj");
 
     Shader sceneShader("../resources/shaders/scene.vert", "../resources/shaders/scene.frag");
     Shader hudShaderObj("../resources/shaders/hud.vert", "../resources/shaders/hud.frag");
@@ -390,6 +389,7 @@ int main() {
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
+        constexpr float MAP_SPEED = 5.0f;
         auto frameStart = std::chrono::high_resolution_clock::now();
 
         glfwGetWindowSize(window, &screenWidth, &screenHeight);
@@ -417,10 +417,11 @@ int main() {
 
         // Camera setup
         float camY = isWalkingMode ? 5.0f : 15.0f;
-        glm::vec3 camPos = glm::vec3(camPosX, camY, camPosZ);
-        glm::vec3 lookAtTarget = glm::vec3(camPos.x, 0.0f, camPos.z - 5.0f);
+        auto camPos = glm::vec3(camPosX, camY, camPosZ);
+        auto lookAtTarget = glm::vec3(camPos.x, 0.0f, camPos.z - 5.0f);
         glm::mat4 view = glm::lookAt(camPos, lookAtTarget, glm::vec3(0, 1, 0));
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float) screenWidth / screenHeight, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), static_cast<float>(screenWidth) / screenHeight,
+                                                0.1f, 100.0f);
 
         sceneShader.use();
         sceneShader.setMat4("view", view);
