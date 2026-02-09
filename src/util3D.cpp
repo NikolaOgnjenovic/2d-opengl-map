@@ -8,48 +8,48 @@ static unsigned int cubeVAO = 0, cubeVBO = 0;
 void renderCube() {
     if (cubeVAO == 0) {
         const float vertices[] = {
-            // back face
+            // back face (CCW: bottom-right, top-left, bottom-left, bottom-right, top-right, top-left)
+            0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f, 1.0f, 0.0f, // bottom-right
+            -0.5f, 0.5f, -0.5f, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f, // top-left
             -0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, // bottom-left
-            0.5f, 0.5f, -0.5f, 0.0f, 0.0f, -1.0f, 1.0f, 1.0f, // top-right
             0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f, 1.0f, 0.0f, // bottom-right
             0.5f, 0.5f, -0.5f, 0.0f, 0.0f, -1.0f, 1.0f, 1.0f, // top-right
-            -0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, // bottom-left
             -0.5f, 0.5f, -0.5f, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f, // top-left
-            // front face
+            // front face (CCW: bottom-left, bottom-right, top-right, bottom-left, top-right, top-left)
             -0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, // bottom-left
             0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, // bottom-right
             0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, // top-right
+            -0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, // bottom-left
             0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, // top-right
             -0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, // top-left
-            -0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, // bottom-left
-            // left face
-            -0.5f, 0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 1.0f, 0.0f, // top-right
-            -0.5f, 0.5f, -0.5f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f, // top-left
-            -0.5f, -0.5f, -0.5f, -1.0f, 0.0f, 0.0f, 0.0f, 1.0f, // bottom-left
+            // left face (CCW: bottom-left, bottom-right, top-right, bottom-left, top-right, top-left)
             -0.5f, -0.5f, -0.5f, -1.0f, 0.0f, 0.0f, 0.0f, 1.0f, // bottom-left
             -0.5f, -0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, // bottom-right
             -0.5f, 0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 1.0f, 0.0f, // top-right
-            // right face
-            0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, // top-left
+            -0.5f, -0.5f, -0.5f, -1.0f, 0.0f, 0.0f, 0.0f, 1.0f, // bottom-left
+            -0.5f, 0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 1.0f, 0.0f, // top-right
+            -0.5f, 0.5f, -0.5f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f, // top-left
+            // right face (CCW: bottom-left, bottom-right, top-right, bottom-left, top-right, top-left)
+            0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, // bottom-left
             0.5f, -0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, // bottom-right
             0.5f, 0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, // top-right
-            0.5f, -0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, // bottom-right
-            0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, // top-left
             0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, // bottom-left
-            // bottom face
-            -0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f, 0.0f, 1.0f, // top-right
-            0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f, 1.0f, 1.0f, // top-left
-            0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f, // bottom-left
-            0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f, // bottom-left
-            -0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f, // bottom-right
-            -0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f, 0.0f, 1.0f, // top-right
-            // top face
-            -0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, // top-left
-            0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, // bottom-right
+            0.5f, 0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, // top-right
+            0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, // top-left
+            // bottom face (CCW: bottom-left, bottom-right, top-right, bottom-left, top-right, top-left)
+            -0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f, // bottom-left
+            0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f, // bottom-right
+            0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f, 1.0f, 1.0f, // top-right
+            -0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f, // bottom-left
+            0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f, 1.0f, 1.0f, // top-right
+            -0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f, 0.0f, 1.0f, // top-left
+            // top face (CCW: bottom-left, bottom-right, top-right, bottom-left, top-right, top-left)
+            -0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, // bottom-left
             0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, // top-right
-            0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, // bottom-right
             -0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, // top-left
-            -0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f // bottom-left
+            -0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, // bottom-left
+            0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, // bottom-right
+            0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f // top-right
         };
         glGenVertexArrays(1, &cubeVAO);
         glGenBuffers(1, &cubeVBO);
@@ -87,7 +87,7 @@ void renderCircle() {
         vertices.push_back(0.5f); // Tex
 
         for (int i = 0; i <= circleSegments; i++) {
-            const float angle = 2.0f * 3.1415926535f * static_cast<float>(i) / static_cast<float>(circleSegments);
+            const float angle = -2.0f * 3.1415926535f * static_cast<float>(i) / static_cast<float>(circleSegments);
             float x = std::cos(angle);
             float z = std::sin(angle);
             vertices.push_back(x);
@@ -125,9 +125,19 @@ void renderCylinder() {
     if (cylinderVAO == 0) {
         std::vector<float> vertices;
         for (int i = 0; i <= circleSegments; i++) {
-            const float angle = 2.0f * 3.1415926535f * static_cast<float>(i) / static_cast<float>(circleSegments);
+            const float angle = -2.0f * 3.1415926535f * static_cast<float>(i) / static_cast<float>(circleSegments);
             float x = std::cos(angle);
             float z = std::sin(angle);
+
+            // Bottom circle (now first for CCW in strip)
+            vertices.push_back(x);
+            vertices.push_back(-0.5f);
+            vertices.push_back(z);
+            vertices.push_back(x);
+            vertices.push_back(0.0f);
+            vertices.push_back(z);
+            vertices.push_back(static_cast<float>(i) / circleSegments);
+            vertices.push_back(0.0f);
 
             // Top circle
             vertices.push_back(x);
@@ -138,16 +148,6 @@ void renderCylinder() {
             vertices.push_back(z);
             vertices.push_back(static_cast<float>(i) / circleSegments);
             vertices.push_back(1.0f);
-
-            // Bottom circle
-            vertices.push_back(x);
-            vertices.push_back(-0.5f);
-            vertices.push_back(z);
-            vertices.push_back(x);
-            vertices.push_back(0.0f);
-            vertices.push_back(z);
-            vertices.push_back(static_cast<float>(i) / circleSegments);
-            vertices.push_back(0.0f);
         }
 
         glGenVertexArrays(1, &cylinderVAO);
@@ -178,9 +178,9 @@ void renderLine3D(const Shader &shader, float x1, float z1, float x2, float z2, 
     float midX = (x1 + x2) / 2.0f;
     float midZ = (z1 + z2) / 2.0f;
     auto model = glm::mat4(1.0f);
-    model = glm::translate(model, glm::vec3(midX, 0.01f, midZ));
+    model = glm::translate(model, glm::vec3(midX, 0.03f, midZ));
     model = glm::rotate(model, -angle, glm::vec3(0.0f, 1.0f, 0.0f));
-    model = glm::scale(model, glm::vec3(length, 0.02f, thickness));
+    model = glm::scale(model, glm::vec3(length, 0.01f, thickness));
     shader.setMat4("model", model);
     shader.setVec3("color", 1.0f, 1.0f, 1.0f);
     shader.setBool("useColor", true);

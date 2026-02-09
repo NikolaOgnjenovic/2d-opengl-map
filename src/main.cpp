@@ -38,6 +38,22 @@ void keyCallback(GLFWwindow *window, const int key, int scancode, const int acti
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
+
+    //Testiranje dubine
+    if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
+        glEnable(GL_DEPTH_TEST); //Ukljucivanje testiranja Z bafera
+    }
+    if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
+        glDisable(GL_DEPTH_TEST);
+    }
+
+    //Odstranjivanje lica (Prethodno smo podesili koje lice uklanjamo sa glCullFace)
+    if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) {
+        glEnable(GL_CULL_FACE);
+    }
+    if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS) {
+        glDisable(GL_CULL_FACE);
+    }
 }
 
 void handleMeasuringModeClick(MeasuringState &measuringState, double mouseX, double mouseY,
@@ -191,12 +207,14 @@ void renderWalkingMode(const Shader &sceneShader, Model &humanModel, const Textu
     sceneShader.use();
     sceneShader.setInt("nrPointLights", 0);
     auto modelMat = glm::mat4(1.0f);
-    modelMat = glm::translate(modelMat, glm::vec3(charPosX, 0.5f, charPosZ));
+    modelMat = glm::translate(modelMat, glm::vec3(charPosX, 0.6f, charPosZ));
     modelMat = glm::rotate(modelMat, glm::radians(charRot), glm::vec3(0.0f, 1.0f, 0.0f));
     modelMat = glm::scale(modelMat, glm::vec3(0.5f));
     sceneShader.setMat4("model", modelMat);
     sceneShader.setBool("useColor", false);
+    // glDisable(GL_CULL_FACE);
     humanModel.Draw(const_cast<Shader &>(sceneShader));
+    // glEnable(GL_CULL_FACE);
 
     // Render HUD
     renderModeIndicator(hudShader, hudVAO, modeIndicator, screenWidth, screenHeight);
@@ -215,7 +233,7 @@ void renderMeasuringMode(const Shader &sceneShader,
 
         // Needle
         auto modelMat = glm::mat4(1.0f);
-        modelMat = glm::translate(modelMat, glm::vec3(p.x, 0.25f, p.z));
+        modelMat = glm::translate(modelMat, glm::vec3(p.x, 0.28f, p.z));
         modelMat = glm::scale(modelMat, glm::vec3(0.05f, 0.5f, 0.05f));
         sceneShader.setMat4("model", modelMat);
         sceneShader.setVec3("color", 0.5f, 0.5f, 0.5f);
@@ -386,6 +404,7 @@ int main() {
 
     glEnable(GL_DEPTH_TEST);
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    glCullFace(GL_BACK);
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
@@ -477,7 +496,6 @@ int main() {
             std::this_thread::sleep_for(std::chrono::duration<double>(sleepTime));
         }
     }
-
 
     cleanupResources(VAO, VBO, EBO, shaderProgram, cornerImage, bgImage, pinImage,
                      walkingModeIndicator, measuringModeIndicator);

@@ -34,8 +34,9 @@ DigitTextures loadDigitTextures() {
 
 void renderImage(const unsigned int shaderProgram, const unsigned int VAO, const unsigned int textureID,
                  const float x, const float y, const float scaleX, const float scaleY) {
+    glDisable(GL_CULL_FACE);
+    // glDisable(GL_DEPTH_TEST);
     glUseProgram(shaderProgram);
-    glDisable(GL_DEPTH_TEST);
 
     auto model = glm::mat4(1.0f);
     model = glm::translate(model, glm::vec3(x, y, 0.0f));
@@ -53,7 +54,9 @@ void renderImage(const unsigned int shaderProgram, const unsigned int VAO, const
     glBindVertexArray(VAO);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
     glBindVertexArray(0);
-    glEnable(GL_DEPTH_TEST);
+
+    // glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
 }
 
 void renderImageBottomRight(const unsigned int shaderProgram, const unsigned int VAO, const TextureData &tex,
